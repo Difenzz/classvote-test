@@ -851,3 +851,31 @@ select:focus {
     letter-spacing: .06em;
     transform: rotate(-6deg);
 }
+
+
+/* ==========================================================================
+   14. DOSSIER PDF (professeur)
+   ========================================================================== */
+
+.fld {
+    display: grid;
+    gap: 2px;
+}
+
+.pv {
+    input,
+    select {
+        min-height: 40px;
+        margin: 0;
+        padding: 6px 10px;
+    }
+
+    .scroll table {
+        min-width: 480px;
+    }
+
+    .scroll th,
+    .scroll td {
+        padding: 6px;
+    }
+}

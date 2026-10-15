@@ -279,7 +279,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({
 }[c]));
 
 /* Écrans qui ont besoin de la classe ouverte */
-const CLASS_VIEWS = ["role", "cand", "vote", "res", "live"];
+const CLASS_VIEWS = ["role", "cand", "vote", "res", "live", "dossier"];
 
 /* Minuscules sans accents : « Léo » et « leo » sont le même prénom */
 const fold = s => String(s || "")
@@ -337,6 +337,14 @@ async function refresh() {
 
         if (view === "live" && prof && cls.needApproval) {
             access = await api.accessRows(cur);
+        }
+
+        if (view === "dossier") {
+            if (!prof) {
+                throw new Error("Réservé au professeur.");
+            }
+            acts    = await api.acts(cur);
+            minutes = await api.minutes(cur);
         }
     }
 }
@@ -502,6 +510,7 @@ function classCardHTML(c) {
                 <button onclick="phase('${k}','vote')">Ouvrir le vote</button>
                 <button class="go" onclick="phase('${k}','res')">Publier les résultats</button>
                 <button onclick="showLive('${k}')">Suivre en direct</button>
+                <button onclick="openDossier('${k}')">Dossier PDF</button>
                 <button class="danger" onclick="del('${k}')">Supprimer</button>
             </div>
 
@@ -655,12 +664,24 @@ function viewCandidate(m) {
             <form class="box" onsubmit="event.preventDefault(); apply()">
                 <h2>Se présenter en binôme</h2>
 
-                <input id="nt" placeholder="Prénom du titulaire"
-                       aria-label="Prénom du titulaire" maxlength="40">
-                <input id="nr" placeholder="Prénom du remplaçant"
-                       aria-label="Prénom du remplaçant" maxlength="40">
-                <textarea id="pg" placeholder="Votre programme en quelques mots"
-                          aria-label="Programme" maxlength="400"></textarea>
+                <p class="muted small">Ces réponses remplissent ton acte de candidature, lu uniquement par ton professeur.
+                    La classe ne voit que les prénoms et le programme.</p>
+
+                <div class="row">
+                    <input id="nt" placeholder="Prénom du titulaire" aria-label="Prénom du titulaire" maxlength="40" style="flex:1">
+                    <input id="ntn" placeholder="Nom du titulaire" aria-label="Nom du titulaire" maxlength="40" style="flex:1">
+                </div>
+                <div class="row">
+                    <input id="nr" placeholder="Prénom du suppléant" aria-label="Prénom du suppléant" maxlength="40" style="flex:1">
+                    <input id="nrn" placeholder="Nom du suppléant" aria-label="Nom du suppléant" maxlength="40" style="flex:1">
+                </div>
+                <textarea id="pres" placeholder="Présentez-vous brièvement (nom, âge, qualités)"
+                          aria-label="Présentation" maxlength="400"></textarea>
+                <textarea id="mot" placeholder="Vos motivations (pourquoi candidater, comment le titulaire a choisi son suppléant)"
+                          aria-label="Motivations" maxlength="600"></textarea>
+                <textarea id="pg" placeholder="Votre programme (rôle auprès de la classe, des professeurs, de l'administration, vos projets)"
+                          aria-label="Programme" maxlength="800"></textarea>
+                <input id="slo" placeholder="Votre slogan" aria-label="Slogan" maxlength="120">
 
                 ${m}
 
@@ -986,6 +1007,7 @@ function viewLive(m) {
             <button onclick="phase('${c.code}','vote','live')">Ouvrir le vote</button>
             <button onclick="phase('${c.code}','res','live')">Publier les résultats</button>
             <button class="link" onclick="go('res')">Voir l'écran des résultats</button>
+            <button class="link" onclick="openDossier('${c.code}')">Dossier PDF</button>
             <button class="link" onclick="go('dash')">← Tableau de bord</button>
         </div>
 
@@ -1258,12 +1280,20 @@ async function del(k) {
 /* --- 6.4 Candidat ---------------------------------------------------- */
 
 async function apply() {
-    const t    = $("#nt").value.trim();
-    const r    = $("#nr").value.trim();
-    const prog = $("#pg").value.trim();
+    const v    = id => $("#" + id).value.trim();
+    const t    = v("nt");
+    const r    = v("nr");
+    const prog = v("pg");
 
-    if (!t || !r) {
-        return err("Indique le prénom du titulaire et celui du remplaçant.");
+    /* Acte de candidature : lu uniquement par le professeur */
+    const act = { classe: "", tp: t, tn: v("ntn"), sp: r, sn: v("nrn"), pres: v("pres"), mot: v("mot"), prog, slogan: v("slo") };
+
+    if (!t || !r || !act.tn || !act.sn) {
+        return err("Indique le nom et le prénom du titulaire et du suppléant.");
+    }
+
+    if (!act.pres || !act.mot || !prog) {
+        return err("Remplis ta présentation, tes motivations et ton programme.");
     }
 
     if (t.toLowerCase() === r.toLowerCase()) {
@@ -1292,10 +1322,20 @@ async function apply() {
         return go("cand", "Tu as déjà présenté un binôme.");
     }
 
+    act.classe = c.name;
+
     try {
-        await api.addPair(cur, t, r, prog);
+        await api.saveAct(cur, act);
+    } catch (e) {
+        return err(e.code === "23505" ? "Tu as déjà présenté un binôme." : explain(e));
+    }
+
+    try {
+        await api.addPair(cur, t, r, prog.slice(0, 400));   // version publique, plus courte
         go("cand");
     } catch (e) {
+        await api.removeAct(cur).catch(() => {});
+
         err(e.code === "23505" ? "Tu as déjà présenté un binôme." : explain(e));
     }
 }
@@ -1307,6 +1347,7 @@ async function unapply(id) {
 
     try {
         await api.removePair(id);
+        await api.removeAct(cur).catch(() => {});
         go("cand");
     } catch (e) {
         go("cand", explain(e));
@@ -1614,6 +1655,521 @@ document.addEventListener("visibilitychange", () => {
 
 
 /* ==========================================================================
+   7bis. ACTES DE CANDIDATURE ET PROCÈS-VERBAL (PDF)
+   ========================================================================== */
+
+let acts    = [];     // actes de candidature de la classe (professeur uniquement)
+let minutes = null;   // procès-verbal enregistré (professeur uniquement)
+let pvRows  = 4;      // nombre de lignes « binômes » du procès-verbal affiché
+
+Object.assign(api, {
+
+    /* Élève : enregistre son acte (lisible par le professeur seulement) */
+    async saveAct(code, data) {
+        check(await sb.from("candidacy_forms").insert({ class_code: code, data }));
+    },
+
+    async removeAct(code) {
+        check(await sb.from("candidacy_forms").delete().eq("class_code", code).eq("owner", me));
+    },
+
+    /* Professeur : tous les actes de sa classe */
+    async acts(code) {
+        return check(
+            await sb.from("candidacy_forms")
+                .select("owner, data, created_at")
+                .eq("class_code", code)
+                .order("created_at")
+        );
+    },
+
+    async minutes(code) {
+        const row = check(await sb.from("minutes").select("data").eq("class_code", code).maybeSingle());
+        return row ? row.data : null;
+    },
+
+    async saveMinutes(code, data) {
+        check(await sb.from("minutes").upsert({
+            class_code: code,
+            data,
+            updated_at: new Date().toISOString()
+        }));
+    }
+});
+
+
+/* --- Génération des PDF (jsPDF, chargé à la demande) ------------------- */
+
+function loadPdf() {
+    if (window.jspdf) {
+        return Promise.resolve(window.jspdf.jsPDF);
+    }
+
+    return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        s.onload  = () => resolve(window.jspdf.jsPDF);
+        s.onerror = () => reject(new Error("Module PDF indisponible : vérifie ta connexion."));
+        document.head.appendChild(s);
+    });
+}
+
+/* Les polices PDF standard ne connaissent que le Latin-1 */
+const pdfSafe = s => String(s ?? "")
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, "...")
+    .replace(/[–—]/g, "-").replace(/œ/g, "oe").replace(/Œ/g, "Oe")
+    .replace(/[^\n\u0020-\u007E\u00A0-\u00FF]/g, "");
+
+const slug = s => fold(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+function pdfFooter(doc) {
+    for (let i = 1; i <= doc.getNumberOfPages(); i++) {
+        doc.setPage(i);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text("Document généré par ClassVote le " + new Date().toLocaleDateString("fr-FR"), 105, 291, { align: "center" });
+    }
+}
+
+/* Une page « ACTE DE CANDIDATURE » */
+function drawAct(doc, a) {
+    const M = 18, W = 210, w = W - 2 * M;
+    let y = 24;
+
+    const room = h => {
+        if (y + h > 282) {
+            doc.addPage();
+            y = 22;
+        }
+    };
+
+    doc.setTextColor(15, 27, 61);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(21);
+    doc.text("ACTE DE CANDIDATURE", W / 2, y, { align: "center" });
+
+    y += 5;
+    doc.setDrawColor(30, 63, 204);
+    doc.setLineWidth(.9);
+    doc.line(M, y, W - M, y);
+    y += 11;
+    doc.setFontSize(11);
+
+    const field = (label, value) => {
+        doc.setFont("helvetica", "bold");
+        const lw = doc.getTextWidth(label) + 3;
+
+        doc.setFont("helvetica", "normal");
+        const lines = doc.splitTextToSize(pdfSafe(value), w - lw);
+
+        room(lines.length * 5.5 + 3);
+        doc.setFont("helvetica", "bold");
+        doc.text(label, M, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(lines, M + lw, y);
+        y += lines.length * 5.5 + 3;
+    };
+
+    const block = (label, value) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10.5);
+        const head = doc.splitTextToSize("- " + label, w);
+
+        doc.setFont("helvetica", "normal");
+        const lines = doc.splitTextToSize(pdfSafe(value), w - 8);
+        const h = Math.max(26, lines.length * 4.9 + 8);
+
+        room(head.length * 5 + h + 8);
+
+        doc.setFont("helvetica", "bold");
+        doc.text(head, M, y);
+        y += head.length * 5 + 1.5;
+
+        doc.setDrawColor(150, 160, 190);
+        doc.setLineWidth(.3);
+        doc.roundedRect(M, y, w, h, 2, 2);
+
+        doc.setFont("helvetica", "normal");
+        doc.text(lines, M + 4, y + 6.5);
+        y += h + 8;
+    };
+
+    field("CLASSE :", a.classe);
+    field("NOM, PRÉNOM DU TITULAIRE :", `${a.tn} ${a.tp}`);
+    field("NOM, PRÉNOM DU SUPPLÉANT :", `${a.sn} ${a.sp}`);
+    y += 4;
+
+    block("PRÉSENTEZ-VOUS BRIÈVEMENT (NOM, ÂGE, QUALITÉS) :", a.pres);
+    block("VOS MOTIVATIONS (POURQUOI VOUS AVEZ CHOISI D'ÊTRE CANDIDATS, COMMENT LE TITULAIRE A CHOISI SON SUPPLÉANT) :", a.mot);
+    block("VOTRE PROGRAMME (VOTRE RÔLE AUPRÈS DE LA CLASSE, DES PROFESSEURS, DE L'ADMINISTRATION, VOS PROJETS) :", a.prog);
+    block("VOTRE SLOGAN ? :", a.slogan);
+}
+
+/* Tableau simple : chaque ligne s'adapte à son texte */
+function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
+    doc.setDrawColor(90, 100, 130);
+    doc.setLineWidth(.25);
+    doc.setTextColor(15, 27, 61);
+
+    const draw = (cells, bold) => {
+        doc.setFont("helvetica", bold ? "bold" : "normal");
+        doc.setFontSize(9.5);
+
+        const lines = cells.map((c, i) => doc.splitTextToSize(pdfSafe(c), widths[i] - 4));
+        const h = Math.max(minH, Math.max(...lines.map(l => l.length)) * 4.4 + 4);
+
+        if (y + h > 282) {
+            doc.addPage();
+            y = 20;
+        }
+
+        let cx = x;
+
+        cells.forEach((_, i) => {
+            if (bold) {
+                doc.setFillColor(232, 236, 250);
+                doc.rect(cx, y, widths[i], h, "FD");
+            } else {
+                doc.rect(cx, y, widths[i], h);
+            }
+            doc.text(lines[i], cx + 2, y + 5.4);
+            cx += widths[i];
+        });
+
+        y += h;
+    };
+
+    draw(head, true);
+    rows.forEach(r => draw(r, false));
+    return y;
+}
+
+const PV_STATS = [
+    ["eleves",      "Nombre d'élèves de la classe"],
+    ["absents",     "Nombre d'élèves absents"],
+    ["abstentions", "Abstentions"],
+    ["votants",     "Votants"],
+    ["blancs",      "Bulletins blancs ou nuls"],
+    ["exprimes",    "Suffrages exprimés"],
+    ["majorite",    "Majorité absolue (1/2 des voix +1)"]
+];
+
+/* « PROCÈS-VERBAL D'ÉLECTION DES DÉLÉGUÉS DE CLASSE » */
+function drawMinutes(doc, p) {
+    const M = 18, W = 210, w = W - 2 * M;
+    const dots = (v, n) => v || ".".repeat(n);
+    let y = 22;
+
+    doc.setTextColor(15, 27, 61);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("PROCÈS-VERBAL D'ÉLECTION", W / 2, y, { align: "center" });
+    doc.text("DES DÉLÉGUÉS DE CLASSE", W / 2, y + 7, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text("Année scolaire " + pdfSafe(p.annee), W / 2, y + 15, { align: "center" });
+    y += 25;
+
+    const intro = doc.splitTextToSize(pdfSafe(
+        `Je soussigné(e) M. / Mme ${dots(p.prof, 20)} déclare avoir fait procéder le ${dots(p.date, 12)} ` +
+        `à l'élection des deux délégués de la classe de ${dots(p.classe, 12)}.`), w);
+
+    doc.text(intro, M, y);
+    y += intro.length * 5.5 + 5;
+
+    y = pdfTable(doc, M, y, [94, 40, 40],
+        ["TITULAIRE + SON SUPPLÉANT", "Suffrages 1er tour", "Suffrages 2ème tour"],
+        p.rows.map(r => [r.name, r.t1, r.t2])) + 8;
+
+    y = pdfTable(doc, M, y, [94, 40, 40],
+        ["", "1er tour", "2ème tour"],
+        PV_STATS.map(([k, label]) => [label, p.stats[k][0], p.stats[k][1]])) + 9;
+
+    if (y > 225) {
+        doc.addPage();
+        y = 22;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Élèves élus délégués :", M, y);
+    y += 3;
+
+    y = pdfTable(doc, M, y, [84, 30, 60],
+        ["TITULAIRE + SUPPLÉANT", "Régime : D.P, EXT", "Signatures"],
+        p.elus.map(e => [e.name || "/", e.regime || "/", ""]), 14) + 12;
+
+    if (y > 235) {
+        doc.addPage();
+        y = 22;
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.text(pdfSafe("Signature du président de séance : " + (p.president || "")), M, y);
+    y += 24;
+    doc.text(pdfSafe("Les assesseurs : " + [p.assesseurs[0], p.assesseurs[1]].filter(Boolean).join("   ")), M, y);
+    y += 24;
+    doc.text("Binôme de titulaires :", M, y);
+}
+
+function note(text, ok) {
+    const el = $("#msg");
+
+    if (el) {
+        el.textContent = text;
+        el.classList.toggle("ok", !!ok);
+    }
+}
+
+async function savePdf(list, name) {
+    try {
+        const J   = await loadPdf();
+        const doc = new J({ unit: "mm", format: "a4" });
+
+        list.forEach((a, i) => {
+            if (i) {
+                doc.addPage();
+            }
+            drawAct(doc, a.data);
+        });
+
+        pdfFooter(doc);
+        doc.save(name);
+        note("PDF téléchargé.", true);
+    } catch (e) {
+        note(explain(e));
+    }
+}
+
+function downloadAct(owner) {
+    const a = acts.find(z => z.owner === owner);
+
+    if (a) {
+        savePdf([a], `acte-candidature-${slug(a.data.classe)}-${slug(a.data.tn)}-${slug(a.data.sn)}.pdf`);
+    }
+}
+
+function downloadAllActs() {
+    if (!acts.length) {
+        return note("Aucun acte à télécharger.");
+    }
+    savePdf(acts, `actes-candidature-${slug(C().name)}.pdf`);
+}
+
+
+/* --- Procès-verbal : formulaire du professeur -------------------------- */
+
+/* Pré-remplissage à partir du vote (modifiable par le professeur) */
+function defaultMinutes(c) {
+    const r1 = c.rounds[0];
+    const r2 = c.rounds[1];
+
+    const votes = (h, id) => {
+        const x = h && (h.results || []).find(z => z.id === id);
+        return x ? String(x.votes) : "";
+    };
+
+    const stats = h => {
+        if (!h) {
+            return {};
+        }
+        const valid = h.valid ?? h.cast;
+
+        return {
+            eleves: h.n, absents: Math.max(0, h.n - h.cast), abstentions: h.abstain || 0,
+            votants: h.cast - (h.abstain || 0), blancs: h.blank || 0,
+            exprimes: valid, majorite: Math.floor(valid / 2) + 1
+        };
+    };
+
+    const nameOf = x => {
+        const a = acts.find(z => z.owner === x.owner);
+        return a ? `${a.data.tn} ${a.data.tp} + ${a.data.sn} ${a.data.sp}` : `${x.t} + ${x.r}`;
+    };
+
+    const s1 = stats(r1);
+    const s2 = stats(r2);
+
+    const rows = c.pairs.slice(0, 8).map(x => ({ name: nameOf(x), t1: votes(r1, x.id), t2: votes(r2, x.id) }));
+    const elus = electedPairs(c).slice(0, 2).map(x => ({ name: nameOf(x), regime: "" }));
+
+    while (rows.length < 4) {
+        rows.push({ name: "", t1: "", t2: "" });
+    }
+    while (elus.length < 2) {
+        elus.push({ name: "", regime: "" });
+    }
+
+    return {
+        prof: "", date: new Date().toLocaleDateString("fr-FR"), classe: c.name, annee: "2026-2027",
+        rows,
+        stats: Object.fromEntries(PV_STATS.map(([k]) => [k, [String(s1[k] ?? ""), String(s2[k] ?? "")]])),
+        elus, president: "", assesseurs: ["", ""]
+    };
+}
+
+function readMinutes() {
+    const g = id => ($("#" + id) ? $("#" + id).value.trim() : "");
+
+    return {
+        prof: g("pv-prof"), date: g("pv-date"), classe: g("pv-classe"), annee: g("pv-annee"),
+        rows: Array.from({ length: pvRows }, (_, i) => ({ name: g("pv-n" + i), t1: g("pv-a" + i), t2: g("pv-b" + i) })),
+        stats: Object.fromEntries(PV_STATS.map(([k]) => [k, [g(`pv-s-${k}-1`), g(`pv-s-${k}-2`)]])),
+        elus: [0, 1].map(i => ({ name: g("pv-en" + i), regime: g("pv-er" + i) })),
+        president: g("pv-pres"),
+        assesseurs: [g("pv-ass0"), g("pv-ass1")]
+    };
+}
+
+function viewDossier(m) {
+    const c  = C();
+    const pm = minutes || defaultMinutes(c);
+
+    pvRows = pm.rows.length;
+
+    const field = (id, label, val) =>
+        `<label class="fld"><span class="small muted">${label}</span><input id="${id}" value="${esc(val)}" maxlength="80"></label>`;
+
+    const actsHTML = c.pairs.map(x => {
+        const a = acts.find(z => z.owner === x.owner);
+
+        return a
+            ? `<div class="access-row row between">
+                   <span><b>${esc(x.t)} &amp; ${esc(x.r)}</b><br>
+                         <span class="muted small">${esc(a.data.tn)} ${esc(a.data.tp)} · ${esc(a.data.sn)} ${esc(a.data.sp)}</span></span>
+                   <button onclick="downloadAct('${esc(a.owner)}')">Télécharger (PDF)</button>
+               </div>`
+            : `<div class="access-row"><b>${esc(x.t)} &amp; ${esc(x.r)}</b> <span class="muted small">· pas d'acte enregistré</span></div>`;
+    }).join("") || `<p class="muted">Aucun binôme pour l'instant.</p>`;
+
+    const rowsHTML = pm.rows.map((r, i) => `
+        <tr>
+            <td><input id="pv-n${i}" value="${esc(r.name)}" aria-label="Binôme ${i + 1}"></td>
+            <td><input id="pv-a${i}" value="${esc(r.t1)}" aria-label="Suffrages 1er tour, binôme ${i + 1}"></td>
+            <td><input id="pv-b${i}" value="${esc(r.t2)}" aria-label="Suffrages 2ème tour, binôme ${i + 1}"></td>
+        </tr>`).join("");
+
+    const statsHTML = PV_STATS.map(([k, label]) => `
+        <tr>
+            <th scope="row">${label}</th>
+            <td><input id="pv-s-${k}-1" value="${esc(pm.stats[k][0])}" aria-label="${label}, 1er tour"></td>
+            <td><input id="pv-s-${k}-2" value="${esc(pm.stats[k][1])}" aria-label="${label}, 2ème tour"></td>
+        </tr>`).join("");
+
+    const elusHTML = pm.elus.map((e, i) => `
+        <tr>
+            <td><input id="pv-en${i}" value="${esc(e.name)}" aria-label="Élu ${i + 1}"></td>
+            <td>
+                <select id="pv-er${i}" aria-label="Régime, élu ${i + 1}">
+                    ${["", "D.P", "EXT"].map(o => `<option value="${o}" ${e.regime === o ? "selected" : ""}>${o || "—"}</option>`).join("")}
+                </select>
+            </td>
+        </tr>`).join("");
+
+    return `
+        <h1>Dossier · ${esc(c.name)}</h1>
+        <p class="muted">Réservé au professeur : actes de candidature et procès-verbal.</p>
+
+        ${m}
+
+        <div class="box">
+            <div class="row between">
+                <h2>Actes de candidature</h2>
+                <button class="go" onclick="downloadAllActs()">Tout télécharger (1 PDF)</button>
+            </div>
+            ${actsHTML}
+        </div>
+
+        <form class="box pv" onsubmit="event.preventDefault(); saveMinutes()">
+            <h2>Procès-verbal d'élection</h2>
+            <p class="muted small">Pré-rempli à partir du vote ; corrige ce qui doit l'être (absents, régime, noms…).</p>
+
+            <div class="split">
+                ${field("pv-prof", "Je soussigné(e) M. / Mme", pm.prof)}
+                ${field("pv-date", "Élection du", pm.date)}
+                ${field("pv-classe", "Classe de", pm.classe)}
+                ${field("pv-annee", "Année scolaire", pm.annee)}
+            </div>
+
+            <div class="scroll"><table>
+                <tr><th>Titulaire + suppléant</th><th>1er tour</th><th>2ème tour</th></tr>
+                ${rowsHTML}
+            </table></div>
+
+            <div class="scroll"><table>
+                <tr><th></th><th>1er tour</th><th>2ème tour</th></tr>
+                ${statsHTML}
+            </table></div>
+
+            <h2>Élèves élus délégués</h2>
+            <div class="scroll"><table>
+                <tr><th>Titulaire + suppléant</th><th>Régime</th></tr>
+                ${elusHTML}
+            </table></div>
+
+            <div class="split">
+                ${field("pv-pres", "Président de séance", pm.president)}
+                ${field("pv-ass0", "Assesseur 1", pm.assesseurs[0])}
+                ${field("pv-ass1", "Assesseur 2", pm.assesseurs[1])}
+            </div>
+
+            <div class="row">
+                <button class="go">Enregistrer</button>
+                <button type="button" onclick="downloadMinutes()">Enregistrer et télécharger (PDF)</button>
+            </div>
+        </form>
+
+        <button class="link" onclick="go('dash')">← Tableau de bord</button>`;
+}
+
+Object.assign(VIEWS, { dossier: viewDossier });
+
+function openDossier(k) {
+    if (prof) {
+        cur = k;
+        go("dossier");
+    }
+}
+
+async function saveMinutes(quiet) {
+    const p = readMinutes();
+
+    try {
+        await api.saveMinutes(cur, p);
+        minutes = p;
+        if (!quiet) {
+            note("Procès-verbal enregistré.", true);
+        }
+        return p;
+    } catch (e) {
+        note(explain(e));
+        return null;
+    }
+}
+
+async function downloadMinutes() {
+    const p = await saveMinutes(true);
+
+    if (!p) {
+        return;
+    }
+
+    try {
+        const J   = await loadPdf();
+        const doc = new J({ unit: "mm", format: "a4" });
+
+        drawMinutes(doc, p);
+        pdfFooter(doc);
+        doc.save(`proces-verbal-${slug(p.classe) || "classe"}.pdf`);
+        note("Procès-verbal enregistré et téléchargé.", true);
+    } catch (e) {
+        note(explain(e));
+    }
+}
+
+
+/* ==========================================================================
    8. THÈME, COOKIES ET PAGES LÉGALES
    ========================================================================== */
 
@@ -1792,7 +2348,7 @@ function viewLegal() {
         <p>Les contenus saisis par les utilisateurs (prénoms, programmes) restent leur propriété ;
            ils autorisent seulement leur affichage dans l'élection concernée.</p>
         <p>Éléments tiers : polices Big Shoulders Display et Public Sans (licence SIL OFL, via Google Fonts)
-           et bibliothèque Supabase JS (licence MIT).</p>
+           et bibliothèques Supabase JS et jsPDF (licence MIT).</p>
 
         <h2>Responsabilité</h2>
         <p>Le site est fourni sans garantie de disponibilité continue. Les éditeurs ne peuvent être tenus
@@ -1829,7 +2385,7 @@ function viewCgu() {
         <h2>4. Comportement attendu</h2>
         <p>Il est interdit de saisir des contenus injurieux, discriminatoires, diffamatoires ou illicites, d'usurper l'identité d'autrui,
            de voter plusieurs fois par des moyens détournés ou de perturber le service (attaque, automatisation, tentative d'accès non autorisé).
-           Utilise uniquement des prénoms ou pseudos : pas de nom de famille ni d'information sensible.
+           Ne saisis que les informations demandées : l'acte de candidature (noms, présentation) n'est lu que par le professeur.
            Le professeur peut supprimer une élection ou une candidature.</p>
 
         <h2>5. Compte professeur</h2>
@@ -1872,7 +2428,9 @@ function viewCookies() {
         <h2>Données traitées</h2>
         <ul>
             <li>Professeur : adresse e-mail et mot de passe (chiffré par Supabase), élections créées.</li>
-            <li>Élève : identifiant technique anonyme de l'appareil, prénoms des candidats, programme, bulletin (sans nom), prénom ou pseudo si la validation est activée.</li>
+            <li>Élève : identifiant technique anonyme de l'appareil, bulletin (sans nom), prénom ou pseudo si la validation est activée.</li>
+            <li>Candidat : noms et prénoms du binôme, présentation, motivations, programme et slogan (acte de candidature). Les prénoms et le programme sont visibles par la classe ; l'acte complet n'est lu que par le professeur.</li>
+            <li>Professeur : procès-verbal de l'élection (résultats, noms des élus, président et assesseurs).</li>
         </ul>
         <p>Finalités : faire fonctionner l'élection (exécution du service). Les données sont conservées tant que l'élection existe puis supprimées avec elle.
            Elles sont hébergées chez Supabase, qui agit comme sous-traitant.</p>
