@@ -4,8 +4,8 @@
 
 /* À remplacer par les valeurs de ton projet :
    Supabase → Project Settings → API (clé "anon" / "publishable" uniquement) */
-const SUPABASE_URL = "https://tejwsflrwnjpvrelosco.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlandzZmxyd25qcHZyZWxvc2NvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjA4MzQ0MSwiZXhwIjoyMTA3NjU5NDQxfQ.8bCoEhszTZa9yjgR4DG6116Y82a8MdmRxJNevECfDEY";
+const SUPABASE_URL = "https://uuttmxiqfdqhutpvkkkr.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1dHRteGlxZmRxaHV0cHZra2tyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwNDU5ODIsImV4cCI6MjEwNzYyMTk4Mn0.Rs8ryM1xPi_kffZph4GE1QBoxg-QEpAYdRsLcCQBzpQ";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -245,9 +245,13 @@ let picked    = [];     // binôme(s) sélectionné(s) sur le bulletin en cours
 let pickedKey = "";     // « classe|tour » auquel correspond la sélection
 
 let polling = false;    // un rafraîchissement automatique est-il en cours ?
+let again   = false;    // un changement est arrivé pendant ce rafraîchissement
+let lastDashSig = "";   // « empreinte » du tableau de bord affiché
+let rt      = { key: "", channel: null };   // abonnement temps réel en cours
+let rtCount = 0;
 let lastSig = "";       // « empreinte » de la dernière classe affichée
 
-const POLL_MS    = 2500;                                   // fréquence du direct
+const POLL_MS    = 5000;                                   // filet de sécurité si le temps réel décroche
 const POLL_VIEWS = ["role", "cand", "vote", "res", "live"];  // écrans mis à jour tout seuls
 
 const PHASES = {
@@ -482,8 +486,8 @@ function classCardHTML(c) {
                         ${c.pairs.length} binôme(s) ·
                         tour ${c.round}: ${c.cast}/${c.n} vote(s) ·
                         <span class="tag">${PHASES[c.phase]}</span>
-                        ${c.doubleVote ? `<span class="tag">jusqu'à 2 binômes / bulletin</span>` : ""}
-                        ${c.needApproval ? `<span class="tag">élèves à valider</span>` : ""}
+                        ${c.doubleVote ? `<span class="tag">2 binômes</span>` : ""}
+                        ${c.needApproval ? `<span class="tag">validation</span>` : ""}
                     </p>
                 </div>
                 <div class="code" aria-label="Code ${k}">${digits}</div>
@@ -709,26 +713,25 @@ function viewVoter(m) {
     } else if (voted) {
         status = `<p class="notice">Ton bulletin est enregistré pour ce tour ✅ Attends la fin du tour…</p>`;
     } else {
-        const choose = picks > 1 ? ` Tu peux choisir <b>1 ou 2 binômes</b> (le deuxième est facultatif).` : "";
+        const choose = picks > 1 ? " Tu peux choisir 1 ou 2 binômes." : "";
 
-        status = `<p class="notice">Tour ${c.round} : élection ${seatLabel(c)} sur ${c.seats}. Il faut la majorité absolue des suffrages exprimés (blancs et abstentions non comptés).${choose}</p>`;
+        status = `<p class="notice">Tour ${c.round} : élection ${seatLabel(c)} sur ${c.seats}. Il faut la majorité absolue des votes.${choose}</p>`;
     }
 
     /* Accès au vote : demande au professeur */
     let accessHTML = "";
 
     if (waiting) {
-        accessHTML = `<p class="notice">⏳ Demande envoyée${myAccess.pseudo ? " (" + esc(myAccess.pseudo) + ")" : ""}. Attends que ton professeur te valide : tu pourras voter dès que ce sera fait.</p>`;
+        accessHTML = `<p class="notice">⏳ En attente de validation par ton professeur…</p>`;
     } else if (showForm) {
         const refused = myAccess.status === "refused"
-            ? `<p class="notice">Ton professeur a refusé ta demande. Va le voir si c'est une erreur, puis refais une demande.</p>`
+            ? `<p class="notice">Demande refusée par ton professeur.</p>`
             : "";
 
         accessHTML = `
             ${refused}
             <form class="box" onsubmit="event.preventDefault(); requestAccess()">
                 <h2>Accès au vote</h2>
-                <p class="muted">Ton professeur doit te valider avant que tu puisses voter. Indique ton prénom (ou un pseudo qu'il reconnaîtra) : il ne sera pas conservé après sa décision.</p>
                 <input id="pseudo" maxlength="40" autocomplete="off"
                        placeholder="Ton prénom ou pseudo" aria-label="Ton prénom ou pseudo">
                 ${m}
@@ -752,23 +755,20 @@ function viewVoter(m) {
         ? `<div class="box ballot">
                <h2>Ton bulletin</h2>
                <p class="muted">${picks > 0
-                   ? (picks > 1
-                       ? `Binômes choisis : ${picked.length} (1 ou 2, comme tu veux)`
-                       : `Binôme choisi : ${picked.length} / 1`)
-                   : "Aucun binôme en lice : tu peux seulement voter blanc ou t'abstenir."}</p>
+                   ? `${picked.length} / ${picks} choisi(s)`
+                   : "Aucun binôme en lice."}</p>
                ${m}
                <button class="go" onclick="ballot('pair')" ${ready ? "" : "disabled"}>Valider mon vote</button>
                <div class="row">
                    <button onclick="ballot('blank')">Voter blanc</button>
                    <button onclick="ballot('abstain')">M'abstenir</button>
                </div>
-               <p class="muted small">Vote blanc : ton bulletin compte comme une participation mais ne va à aucun binôme. Abstention : tu ne prends pas part au vote. Dans les deux cas, ni l'un ni l'autre ne compte dans les suffrages exprimés.</p>
            </div>`
         : "";
 
     return `
         <h1>Page électeur</h1>
-        <p class="muted">Un bulletin par tour, anonyme et définitif.</p>
+        <p class="muted">Un vote par tour, anonyme et définitif.</p>
 
         ${c.phase === "vote" ? lastRoundNotice(c) : ""}
         ${status}
@@ -813,9 +813,10 @@ function viewDashboard(m) {
     const cards = myClasses.map(classCardHTML).join("")
         || `<p class="muted">Aucune élection pour l'instant.</p>`;
 
-    return `
-        <h1>Espace professeur</h1>
+    /* Une seule élection en cours à la fois */
+    const active = myClasses.some(c => c.phase !== "res");
 
+    const newForm = active ? m : `
         <form class="box" onsubmit="event.preventDefault(); newClass()">
             <h2>Nouvelle élection</h2>
 
@@ -828,21 +829,23 @@ function viewDashboard(m) {
 
             <label class="opt">
                 <input type="checkbox" id="dbl">
-                <span><b>Chaque élève peut voter pour 1 ou 2 binômes</b> en une seule fois
-                (le deuxième est facultatif). Les 2 binômes peuvent alors être élus dans le même tour.</span>
+                <span>Vote pour 1 ou 2 binômes</span>
             </label>
 
             <label class="opt">
                 <input type="checkbox" id="cod" checked>
-                <span><b>Validation des élèves par le professeur</b> : chaque élève envoie son prénom,
-                tu le valides en un clic. Limite à un bulletin par élève présent et permet de repérer
-                quelqu'un qui revote en navigation privée. Sans cette option, rien ne bloque ce contournement.</span>
+                <span>Valider les élèves un par un</span>
             </label>
 
             ${m}
 
             <button class="go">Générer le code</button>
-        </form>
+        </form>`;
+
+    return `
+        <h1>Espace professeur</h1>
+
+        ${newForm}
 
         ${cards}
 
@@ -883,7 +886,7 @@ function accessBoxHTML(c) {
     }).join("") || `<p class="muted">Aucune demande en attente.</p>`;
 
     const knownHTML = known.length
-        ? `<p class="muted small">Validés sur cet appareil :</p>
+        ? `<p class="muted small">Validés :</p>
            ${known.map(k => `
                <div class="row between access-row">
                    <span>${esc(k.pseudo)}</span>
@@ -897,7 +900,6 @@ function accessBoxHTML(c) {
                 <h2>Élèves à valider</h2>
                 <span>${approved} validé(s) / ${c.n}</span>
             </div>
-            <p class="muted small">Chaque élève envoie son prénom ou un pseudo : valide-le si tu le reconnais. Le nom est effacé de la base dès ta décision. Un même prénom qui revient (ex : en navigation privée) est signalé : refuse-le.</p>
             ${rows}
             ${knownHTML}
         </div>`;
@@ -930,16 +932,14 @@ function viewLive(m) {
     if (c.phase !== "vote") {
         verdict = `<p class="notice">Le vote n'est pas ouvert (phase : ${PHASES[c.phase]}).</p>`;
     } else if (qualified.length) {
-        const slots = slotsOf(c);
-        const extra = qualified.length > slots
-            ? " (plus de binômes que de sièges : en cas d'égalité pour le dernier siège, les ex æquo ne sont pas élus)"
-            : "";
+        const names = running
+            .filter(x => qualified.includes(x.id))
+            .map(x => `${esc(x.t)} &amp; ${esc(x.r)}`)
+            .join(" et ");
 
-        verdict = `<p class="notice">✅ ${qualified.length} binôme(s) au-dessus de la majorité absolue (${needed} voix sur ${c.valid} suffrage(s) exprimé(s))${extra} : tu peux clôturer le tour.</p>`;
-    } else if (c.valid === 0) {
-        verdict = `<p class="notice">Aucun suffrage exprimé pour l'instant.</p>`;
+        verdict = `<p class="notice">✅ ${names} ${qualified.length > 1 ? "ont" : "a"} la majorité absolue : tu peux clôturer le tour.</p>`;
     } else {
-        verdict = `<p class="notice">Majorité absolue : ${needed} voix sur ${c.valid} suffrage(s) exprimé(s). Pas encore atteinte.</p>`;
+        verdict = `<p class="notice">Majorité absolue : ${needed} voix sur ${c.valid} exprimée(s). Pas encore atteinte.</p>`;
     }
 
     const closeButton = c.phase === "vote"
@@ -1063,6 +1063,10 @@ function render() {
     lastSig = cls && CLASS_VIEWS.includes(view)
         ? view + "|" + signature(cls, voted)
         : "";
+
+    lastDashSig = view === "dash" ? dashSig(myClasses) : "";
+
+    syncRealtime();
 }
 
 
@@ -1168,7 +1172,7 @@ async function newClass() {
     try {
         await api.createClass(name, n, doubleVote, needApproval);
     } catch (e) {
-        return err(explain(e));
+        return err(e.code === "42501" ? "Tu as déjà une élection en cours." : explain(e));
     }
 
     go("dash");
@@ -1404,9 +1408,10 @@ async function ballot(kind) {
 function softRender() {
     const saved = [...document.querySelectorAll("#app input[id], #app textarea[id]")]
         .map(el => ({
-            id:    el.id,
-            value: el.value,
-            focus: el === document.activeElement
+            id:      el.id,
+            value:   el.value,
+            checked: el.checked,
+            focus:   el === document.activeElement
         }));
 
     render();
@@ -1416,6 +1421,7 @@ function softRender() {
 
         if (el) {
             el.value = s.value;
+            el.checked = s.checked;
 
             if (s.focus) {
                 el.focus();
@@ -1428,7 +1434,12 @@ function softRender() {
    Quand le professeur publie les résultats, les élèves y sont emmenés
    automatiquement, sans aucun clic. */
 async function poll() {
-    if (polling || document.hidden || !cur || !POLL_VIEWS.includes(view)) {
+    if (document.hidden || !cur || !POLL_VIEWS.includes(view)) {
+        return;
+    }
+
+    if (polling) {
+        again = true;
         return;
     }
 
@@ -1478,10 +1489,123 @@ async function poll() {
         console.warn("Mise à jour automatique impossible :", e);
     } finally {
         polling = false;
+
+        if (again) {
+            again = false;
+            refreshLive();
+        }
     }
 }
 
-setInterval(poll, POLL_MS);
+/* Tableau de bord du professeur : même principe que poll() */
+function dashSig(list) {
+    return JSON.stringify(list.map(c =>
+        [c.code, c.phase, c.round, c.cast, c.blank, c.abst, c.pairs.length, c.rounds.length]));
+}
+
+async function pollDash() {
+    if (document.hidden || view !== "dash" || !prof) {
+        return;
+    }
+
+    if (polling) {
+        again = true;
+        return;
+    }
+
+    polling = true;
+
+    try {
+        const fresh = await api.myClasses(prof);
+
+        if (view !== "dash") {
+            return;
+        }
+
+        myClasses = fresh;
+
+        const sig = dashSig(fresh);
+
+        if (sig !== lastDashSig) {
+            lastDashSig = sig;
+            softRender();
+        }
+    } catch (e) {
+        console.warn("Mise à jour automatique impossible :", e);
+    } finally {
+        polling = false;
+
+        if (again) {
+            again = false;
+            refreshLive();
+        }
+    }
+}
+
+const refreshLive = () => view === "dash" ? pollDash() : poll();
+
+
+/* --- Temps réel : la base prévient dès qu'une ligne change -------------- */
+
+function watch(key, specs) {
+    if (rt.key === key) {
+        return;
+    }
+
+    if (rt.channel) {
+        sb.removeChannel(rt.channel);
+    }
+
+    rt = { key, channel: null };
+
+    if (!key) {
+        return;
+    }
+
+    const channel = sb.channel("live-" + (++rtCount));
+
+    specs.forEach(sp => channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: sp.table, filter: sp.filter },
+        refreshLive
+    ));
+
+    channel.subscribe();
+    rt.channel = channel;
+}
+
+/* S'abonne à ce que l'écran courant affiche (classe ouverte, ou toutes les classes du professeur) */
+function syncRealtime() {
+    let key   = "";
+    let specs = [];
+
+    if (cur && cls && POLL_VIEWS.includes(view)) {
+        key   = "class:" + cur;
+        specs = [
+            { table: "classes",      filter: "code=eq." + cur },
+            { table: "pairs",        filter: "class_code=eq." + cur },
+            { table: "voter_access", filter: "class_code=eq." + cur }
+        ];
+    } else if (view === "dash" && prof && myClasses.length) {
+        const codes = myClasses.map(c => c.code).join(",");
+
+        key   = "dash:" + codes;
+        specs = [
+            { table: "classes", filter: "owner=eq." + prof },
+            { table: "pairs",   filter: "class_code=in.(" + codes + ")" }
+        ];
+    }
+
+    watch(key, specs);
+}
+
+/* Filet de sécurité + rattrapage quand l'onglet redevient visible */
+setInterval(refreshLive, POLL_MS);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+        refreshLive();
+    }
+});
 
 
 /* ==========================================================================
