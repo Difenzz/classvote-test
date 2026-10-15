@@ -2397,7 +2397,7 @@ function viewLegal() {
     return docHTML("Mentions légales", `
         <h2>Éditeurs du site</h2>
         <p>ClassVote est édité par <b>Enzo Perdu</b> et <b>Emerick Woiret</b>, personnes physiques.
-           Contact : ${TODO("adresse e-mail de contact à compléter")}</p>
+           Contact : ${TODO("enzo.perdu@outlook.fr")}</p>
 
         <h2>Directeurs de la publication</h2>
         <p>Enzo Perdu et Emerick Woiret.</p>
@@ -2474,7 +2474,7 @@ function viewCgu() {
         <p>Les CGU peuvent évoluer ; la version en ligne fait foi, avec sa date de mise à jour.</p>
 
         <h2>10. Droit applicable et contact</h2>
-        <p>Droit français. Contact : ${TODO("adresse e-mail de contact à compléter")}</p>`);
+        <p>Droit français. Contact : ${TODO("enzo.perdu@outlook.fr")}</p>`);
 }
 
 function viewCookies() {
@@ -2491,7 +2491,7 @@ function viewCookies() {
         <div class="row"><button onclick="showConsent(true)">Modifier mes choix</button></div>
 
         <h2>Responsables du traitement</h2>
-        <p>Enzo Perdu et Emerick Woiret. Contact : ${TODO("adresse e-mail de contact à compléter")}</p>
+        <p>Enzo Perdu et Emerick Woiret. Contact : ${TODO("enzo.perdu@outlook.fr")}</p>
 
         <h2>Données traitées</h2>
         <ul>
