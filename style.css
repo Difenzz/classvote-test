@@ -879,3 +879,184 @@ select:focus {
         padding: 6px;
     }
 }
+
+
+/* ==========================================================================
+   15. ESPACE PROFESSEUR
+   ========================================================================== */
+
+.stack {
+    display: grid;
+    gap: 20px;
+}
+
+.section-title {
+    margin-top: 10px;
+}
+
+.grow {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.class-card {
+    gap: 18px;
+    padding: clamp(18px, 3.5vw, 28px);
+
+    .top {
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    h2 {
+        margin-bottom: 8px;
+        font-size: 34px;
+    }
+
+    .tags {
+        gap: 6px;
+    }
+}
+
+/* Chiffres clés */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.stat {
+    display: grid;
+    gap: 2px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+
+    b {
+        font: 800 32px/1 var(--display);
+        color: var(--blue);
+
+        small {
+            color: var(--ink-2);
+            font-size: 18px;
+        }
+    }
+
+    span {
+        color: var(--ink-2);
+        font-size: 13.5px;
+    }
+}
+
+/* Sélecteur de phase */
+.field-group {
+    display: grid;
+    gap: 6px;
+}
+
+.seg {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+
+    button {
+        min-height: 42px;
+        padding: 8px 6px;
+        border: 0;
+        border-radius: 10px;
+        color: var(--ink-2);
+        font-size: 14.5px;
+
+        &[aria-pressed="true"] {
+            background: var(--blue);
+            color: var(--on-blue);
+            box-shadow: 0 2px 0 var(--press);
+        }
+    }
+}
+
+/* Rangée d'actions : respiration entre les boutons, « Supprimer » isolé à droite */
+.card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+
+    .spacer {
+        margin-left: auto;
+    }
+}
+
+.nav-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 22px;
+}
+
+/* Création d'une élection */
+.new-election {
+    gap: 16px;
+    padding: clamp(18px, 3.5vw, 28px);
+
+    .fields {
+        display: grid;
+        gap: 14px;
+    }
+
+    .fld input {
+        margin: 0;
+    }
+
+    .opts {
+        display: grid;
+        gap: 10px;
+    }
+
+    .opt {
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+    }
+
+    .opt:has(input:checked) {
+        background: var(--blue-soft);
+        border-color: var(--blue);
+    }
+}
+
+@media (min-width: 560px) {
+
+    .new-election .fields {
+        grid-template-columns: 2fr 1fr;
+    }
+}
+
+.empty {
+    padding: 28px 20px;
+    border: 2px dashed var(--line);
+    border-radius: var(--r);
+    color: var(--ink-2);
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+
+    .card-actions button {
+        flex: 1 1 100%;
+    }
+
+    .card-actions .spacer {
+        margin-left: 0;
+    }
+
+    .stat b {
+        font-size: 26px;
+    }
+}

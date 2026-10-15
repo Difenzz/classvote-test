@@ -487,34 +487,45 @@ function classCardHTML(c) {
         .map(d => `<span>${d}</span>`)
         .join("");
 
-    return `
-        <div class="box">
+    /* Sélecteur de phase : la phase courante est mise en avant */
+    const seg = Object.keys(PHASES)
+        .map(p => `<button type="button" aria-pressed="${c.phase === p}" onclick="phase('${k}','${p}')">${PHASES[p]}</button>`)
+        .join("");
 
-            <div class="row between">
-                <div>
+    const tags = `
+        <span class="tag">${PHASES[c.phase]}</span>
+        ${c.doubleVote ? `<span class="tag">2 binômes</span>` : ""}
+        ${c.needApproval ? `<span class="tag">Validation des élèves</span>` : ""}`;
+
+    return `
+        <section class="box class-card">
+
+            <div class="row between top">
+                <div class="grow">
                     <h2>${esc(c.name)}</h2>
-                    <p>
-                        ${c.n} élèves ·
-                        ${c.pairs.length} binôme(s) ·
-                        tour ${c.round}: ${c.cast}/${c.n} vote(s) ·
-                        <span class="tag">${PHASES[c.phase]}</span>
-                        ${c.doubleVote ? `<span class="tag">2 binômes</span>` : ""}
-                        ${c.needApproval ? `<span class="tag">validation</span>` : ""}
-                    </p>
+                    <div class="row tags">${tags}</div>
                 </div>
                 <div class="code" aria-label="Code ${k}">${digits}</div>
             </div>
 
-            <div class="row">
-                <button onclick="phase('${k}','cand')">Candidatures</button>
-                <button onclick="phase('${k}','vote')">Ouvrir le vote</button>
-                <button class="go" onclick="phase('${k}','res')">Publier les résultats</button>
-                <button onclick="showLive('${k}')">Suivre en direct</button>
-                <button onclick="openDossier('${k}')">Dossier PDF</button>
-                <button class="danger" onclick="del('${k}')">Supprimer</button>
+            <div class="stats">
+                <div class="stat"><b>${c.n}</b><span>élèves</span></div>
+                <div class="stat"><b>${c.pairs.length}</b><span>binôme(s)</span></div>
+                <div class="stat"><b>${c.cast}<small>/${c.n}</small></b><span>votes · tour ${c.round}</span></div>
             </div>
 
-        </div>`;
+            <div class="field-group">
+                <span class="small muted" id="ph-${k}">Phase de l'élection</span>
+                <div class="seg" role="group" aria-labelledby="ph-${k}">${seg}</div>
+            </div>
+
+            <div class="card-actions">
+                <button class="go" onclick="showLive('${k}')">Suivre en direct</button>
+                <button onclick="openDossier('${k}')">Dossier PDF</button>
+                <button class="danger spacer" onclick="del('${k}')">Supprimer</button>
+            </div>
+
+        </section>`;
 }
 
 /* Une ligne de résultat avec sa barre (le trait central = majorité à 50 %) */
@@ -836,31 +847,41 @@ function viewTeacherLogin(m) {
 
 function viewDashboard(m) {
     const cards = myClasses.map(classCardHTML).join("")
-        || `<p class="muted">Aucune élection pour l'instant.</p>`;
+        || `<div class="empty">Aucune élection pour l'instant. Crée la première ci-dessus.</div>`;
 
     /* Une seule élection en cours à la fois */
     const active = myClasses.some(c => c.phase !== "res");
 
-    const newForm = active ? m : `
-        <form class="box" onsubmit="event.preventDefault(); newClass()">
+    const newForm = active ? `
+        <div class="notice">Une élection est déjà en cours : publie ses résultats pour pouvoir en créer une nouvelle.</div>
+        ${m}` : `
+        <form class="box new-election" onsubmit="event.preventDefault(); newClass()">
             <h2>Nouvelle élection</h2>
 
-            <div class="row">
-                <input id="cn" placeholder="Classe (ex : 3B)"
-                       aria-label="Classe" maxlength="40" style="flex:2">
-                <input id="nb" type="number" min="1" placeholder="Nombre d'élèves"
-                       aria-label="Nombre d'élèves" style="flex:1">
+            <div class="fields">
+                <label class="fld">
+                    <span class="small muted">Classe</span>
+                    <input id="cn" placeholder="ex : 3B" maxlength="40">
+                </label>
+                <label class="fld">
+                    <span class="small muted">Nombre d'élèves</span>
+                    <input id="nb" type="number" min="1" placeholder="ex : 28">
+                </label>
             </div>
 
-            <label class="opt">
-                <input type="checkbox" id="dbl">
-                <span>Vote pour 1 ou 2 binômes</span>
-            </label>
+            <div class="opts">
+                <label class="opt">
+                    <input type="checkbox" id="dbl">
+                    <span><b>Vote pour 1 ou 2 binômes</b><br>
+                          <span class="small muted">Chaque élève peut choisir jusqu'à 2 binômes sur son bulletin.</span></span>
+                </label>
 
-            <label class="opt">
-                <input type="checkbox" id="cod" checked>
-                <span>Valider les élèves un par un</span>
-            </label>
+                <label class="opt">
+                    <input type="checkbox" id="cod" checked>
+                    <span><b>Valider les élèves un par un</b><br>
+                          <span class="small muted">Tu approuves chaque élève avant qu'il puisse voter.</span></span>
+                </label>
+            </div>
 
             ${m}
 
@@ -868,13 +889,15 @@ function viewDashboard(m) {
         </form>`;
 
     return `
-        <h1>Espace professeur</h1>
+        <div class="row between">
+            <h1>Espace professeur</h1>
+            <button class="link" onclick="logout()">Déconnexion</button>
+        </div>
 
         ${newForm}
 
-        ${cards}
-
-        <button class="link" onclick="logout()">Déconnexion</button>`;
+        <h2 class="section-title">Mes élections</h2>
+        <div class="stack">${cards}</div>`;
 }
 
 
@@ -1002,14 +1025,17 @@ function viewLive(m) {
 
         ${electedHTML}
 
-        <div class="row">
+        <div class="card-actions">
             ${closeButton}
             <button onclick="phase('${c.code}','vote','live')">Ouvrir le vote</button>
             <button onclick="phase('${c.code}','res','live')">Publier les résultats</button>
-            <button class="link" onclick="go('res')">Voir l'écran des résultats</button>
-            <button class="link" onclick="openDossier('${c.code}')">Dossier PDF</button>
-            <button class="link" onclick="go('dash')">← Tableau de bord</button>
         </div>
+
+        <nav class="nav-row" aria-label="Navigation">
+            <button class="link" onclick="go('dash')">← Tableau de bord</button>
+            <button class="link" onclick="go('res')">Écran des résultats</button>
+            <button class="link" onclick="openDossier('${c.code}')">Dossier PDF</button>
+        </nav>
 
         ${history ? `<h2>Tours précédents</h2><div class="grid">${history}</div>` : ""}`;
 }
@@ -1688,6 +1714,19 @@ Object.assign(api, {
         return row ? row.data : null;
     },
 
+    /* Clôture : supprime définitivement actes et procès-verbal de la classe */
+    async purgeDossier(code) {
+        check(await sb.from("candidacy_forms").delete().eq("class_code", code));
+        check(await sb.from("minutes").delete().eq("class_code", code));
+
+        /* Un refus RLS ne renvoie aucune erreur : on vérifie qu'il ne reste rien */
+        const left = await api.acts(code);
+
+        if (left.length) {
+            throw new Error("Suppression impossible : exécute migration_v6.sql dans Supabase.");
+        }
+    },
+
     async saveMinutes(code, data) {
         check(await sb.from("minutes").upsert({
             class_code: code,
@@ -2120,6 +2159,16 @@ function viewDossier(m) {
             </div>
         </form>
 
+        <div class="box">
+            <h2>Clôturer l'élection</h2>
+            <p class="muted">Supprime définitivement les actes de candidature et le procès-verbal enregistrés.
+               Télécharge-les d'abord : après la clôture, ils ne sont plus récupérables.</p>
+            ${c.phase === "res" ? "" : `<p class="notice">Publie d'abord les résultats pour pouvoir clôturer.</p>`}
+            <div class="row">
+                <button class="danger" onclick="closeElection()" ${c.phase === "res" ? "" : "disabled"}>Clôturer et supprimer les données</button>
+            </div>
+        </div>
+
         <button class="link" onclick="go('dash')">← Tableau de bord</button>`;
 }
 
@@ -2145,6 +2194,25 @@ async function saveMinutes(quiet) {
     } catch (e) {
         note(explain(e));
         return null;
+    }
+}
+
+async function closeElection() {
+    if (C().phase !== "res") {
+        return note("Publie d'abord les résultats.");
+    }
+
+    if (!confirm("Clôturer l'élection ? Les actes de candidature et le procès-verbal seront supprimés définitivement. Les as-tu téléchargés ?")) {
+        return;
+    }
+
+    try {
+        await api.purgeDossier(cur);
+        minutes = null;
+        await go("dossier");
+        note("Élection clôturée : les données ont été supprimées.", true);
+    } catch (e) {
+        note(explain(e));
     }
 }
 
@@ -2432,7 +2500,7 @@ function viewCookies() {
             <li>Candidat : noms et prénoms du binôme, présentation, motivations, programme et slogan (acte de candidature). Les prénoms et le programme sont visibles par la classe ; l'acte complet n'est lu que par le professeur.</li>
             <li>Professeur : procès-verbal de l'élection (résultats, noms des élus, président et assesseurs).</li>
         </ul>
-        <p>Finalités : faire fonctionner l'élection (exécution du service). Les données sont conservées tant que l'élection existe puis supprimées avec elle.
+        <p>Finalités : faire fonctionner l'élection (exécution du service). Les actes de candidature et le procès-verbal sont supprimés dès que le professeur clôture l'élection ; le reste des données est supprimé avec l'élection.
            Elles sont hébergées chez Supabase, qui agit comme sous-traitant.</p>
         <p>Les polices sont chargées depuis Google Fonts : ton adresse IP est alors transmise à Google.</p>
 
