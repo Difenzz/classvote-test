@@ -2403,7 +2403,7 @@ function viewLegal() {
         <p>Enzo Perdu et Emerick Woiret.</p>
 
         <h2>Hébergement</h2>
-        <p>Site : ${TODO("nom, adresse et téléphone de l'hébergeur à compléter")}</p>
+        <p>Site : ${TODO("Vercel")}</p>
         <p>Base de données et authentification : Supabase (supabase.com).</p>
 
         <h2>Propriété intellectuelle</h2>
