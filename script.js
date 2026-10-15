@@ -4,8 +4,8 @@
 
 /* À remplacer par les valeurs de ton projet :
    Supabase → Project Settings → API (clé "anon" / "publishable" uniquement) */
-const SUPABASE_URL = "https://tejwsflrwnjpvrelosco.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlandzZmxyd25qcHZyZWxvc2NvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjA4MzQ0MSwiZXhwIjoyMTA3NjU5NDQxfQ.8bCoEhszTZa9yjgR4DG6116Y82a8MdmRxJNevECfDEY";
+const SUPABASE_URL = "https://uuttmxiqfdqhutpvkkkr.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1dHRteGlxZmRxaHV0cHZra2tyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwNDU5ODIsImV4cCI6MjEwNzYyMTk4Mn0.Rs8ryM1xPi_kffZph4GE1QBoxg-QEpAYdRsLcCQBzpQ";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -59,7 +59,7 @@ function normalize(c) {
         abst,
         valid:      cast - blank - abst,        // suffrages exprimés
         doubleVote: !!c.double_vote,
-        useCodes:   !!c.use_codes,
+        needApproval: !!c.need_approval,
         round:  c.round || 1,
         seats:  c.seats || 2,
         rounds: c.rounds || [],
@@ -118,13 +118,13 @@ const api = {
     },
 
     /* Crée la classe avec un code unique à 6 chiffres (nouvel essai si doublon) */
-    async createClass(name, n, doubleVote, useCodes) {
+    async createClass(name, n, doubleVote, needApproval) {
         for (let i = 0; i < 5; i++) {
             const code = String(Math.floor(100000 + Math.random() * 900000));
             const { error } = await sb.from("classes").insert({
                 code, name, n,
                 double_vote: !!doubleVote,
-                use_codes:   !!useCodes
+                need_approval: !!needApproval
             });
 
             if (!error) {
@@ -151,19 +151,38 @@ const api = {
         }
     },
 
-    /* Codes de vote individuels (voir migration_v3.sql) */
-    async generateCodes(code) {
-        check(await sb.rpc("generate_codes", { p_class: code }));
+    /* Validation des élèves par le professeur (voir migration_v4.sql) */
+
+    /* Élève : envoie son prénom/pseudo au professeur */
+    async requestAccess(code, pseudo) {
+        return check(await sb.rpc("request_access", { p_class: code, p_pseudo: pseudo }));
     },
 
-    async getCodes(code) {
+    /* Élève : où en est ma demande ? (le pseudo n'est visible que tant qu'elle est en attente) */
+    async myAccess(code) {
         const rows = check(
-            await sb.from("vote_codes")
-                .select("code")
+            await sb.from("voter_access")
+                .select("status, pseudo")
                 .eq("class_code", code)
-                .order("code")
+                .eq("voter_id", me)
+                .limit(1)
         );
-        return rows.map(r => r.code);
+        return rows && rows[0] ? rows[0] : { status: "none", pseudo: null };
+    },
+
+    /* Professeur : toutes les demandes de sa classe */
+    async accessRows(code) {
+        return check(
+            await sb.from("voter_access")
+                .select("voter_id, status, pseudo, created_at")
+                .eq("class_code", code)
+                .order("created_at")
+        );
+    },
+
+    /* Professeur : valide (true) ou refuse / retire (false) */
+    async decideAccess(code, voterId, approve) {
+        check(await sb.rpc("decide_access", { p_class: code, p_voter: voterId, p_approve: approve }));
     },
 
     async deleteClass(code) {
@@ -189,14 +208,13 @@ const api = {
         return !!check(await sb.rpc("has_voted", { p_class: code }));
     },
 
-    /* Bulletin atomique côté serveur (voir migration_v3.sql).
+    /* Bulletin atomique côté serveur (voir migration_v4.sql).
        kind : "pair" (1 ou 2 binômes), "blank" (vote blanc) ou "abstain" (abstention) */
-    async castBallot(code, kind, pairIds, voteCode) {
+    async castBallot(code, kind, pairIds) {
         check(await sb.rpc("cast_ballot", {
             p_class: code,
             p_kind:  kind,
-            p_pairs: pairIds,
-            p_code:  voteCode || null
+            p_pairs: pairIds
         }));
     },
 
@@ -220,11 +238,11 @@ let msg  = "";       // message d'erreur à afficher au prochain rendu
 let cls       = null;   // classe ouverte (avec ses binômes)
 let voted     = false;  // cet appareil a-t-il déjà voté dans cette classe ?
 let myClasses = [];     // classes du professeur connecté
-let codes     = [];     // codes de vote de la classe ouverte (professeur)
+let access    = [];     // demandes d'accès des élèves (professeur)
+let myAccess  = { status: "none", pseudo: null };   // ma propre demande (élève)
 
 let picked    = [];     // binôme(s) sélectionné(s) sur le bulletin en cours
 let pickedKey = "";     // « classe|tour » auquel correspond la sélection
-let voteCode  = "";     // code de vote personnel saisi par l'élève
 
 let polling = false;    // un rafraîchissement automatique est-il en cours ?
 let lastSig = "";       // « empreinte » de la dernière classe affichée
@@ -257,23 +275,30 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({
 }[c]));
 
 /* Écrans qui ont besoin de la classe ouverte */
-const CLASS_VIEWS = ["role", "cand", "vote", "res", "live", "codes"];
+const CLASS_VIEWS = ["role", "cand", "vote", "res", "live"];
 
-/* Code de vote : gardé le temps de l'onglet (sessionStorage peut être indisponible) */
-function loadCode(k) {
+/* Minuscules sans accents : « Léo » et « leo » sont le même prénom */
+const fold = s => String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+/* Élèves validés, mémorisés UNIQUEMENT sur l'appareil du professeur (jamais en base) :
+   ils servent à repérer un doublon (même prénom qui se représente en navigation privée)
+   et à retirer un accès validé par erreur. */
+function loadApproved(k) {
     try {
-        return sessionStorage.getItem("vc:" + k) || "";
+        return JSON.parse(localStorage.getItem("approved:" + k) || "[]");
     } catch (e) {
-        return "";
+        return [];
     }
 }
 
-function saveCode(v) {
-    voteCode = String(v).toUpperCase().replace(/[^A-Z0-9]/g, "");
-
+function saveApproved(k, list) {
     try {
-        sessionStorage.setItem("vc:" + cur, voteCode);
-    } catch (e) { /* tant pis : le code reste en mémoire */ }
+        localStorage.setItem("approved:" + k, JSON.stringify(list));
+    } catch (e) { /* stockage indisponible : on perd seulement la détection de doublons */ }
 }
 
 /* S'assure que cet appareil a une session (nouvel essai si le démarrage a échoué) */
@@ -302,18 +327,12 @@ async function refresh() {
         }
 
         if (view === "vote") {
-            voted = await api.hasVoted(cur);
-            voteCode = loadCode(cur);
+            voted    = await api.hasVoted(cur);
+            myAccess = cls.needApproval ? await api.myAccess(cur) : { status: "none", pseudo: null };
         }
 
-        if (view === "codes" && cls.useCodes) {
-            codes = await api.getCodes(cur);
-
-            /* Élection créée sans que les codes aient pu être générés : on réessaie */
-            if (codes.length < cls.n) {
-                await api.generateCodes(cur);
-                codes = await api.getCodes(cur);
-            }
+        if (view === "live" && prof && cls.needApproval) {
+            access = await api.accessRows(cur);
         }
     }
 }
@@ -384,7 +403,8 @@ function slotsOf(c) {
     return c.doubleVote ? Math.max(1, Math.min(2, left)) : 1;
 }
 
-/* Nombre de binômes à cocher sur le bulletin (même règle que le serveur) */
+/* Nombre MAXIMUM de binômes cochables sur le bulletin (même règle que le serveur) :
+   l'élève en choisit de 1 jusqu'à ce maximum */
 const ballotPicks = c => Math.min(slotsOf(c), runningPairs(c).length);
 
 /* « du binôme n°1 » / « des binômes n°1 et n°2 » */
@@ -407,8 +427,8 @@ function signature(c, hasVoted) {
     const withVotes = view === "live";
 
     return JSON.stringify([
-        c.phase, c.round, c.rounds.length, hasVoted,
-        withVotes ? [c.cast, c.blank, c.abst] : 0,
+        c.phase, c.round, c.rounds.length, hasVoted, myAccess.status,
+        withVotes ? [c.cast, c.blank, c.abst, access.map(a => [a.voter_id, a.status, a.pseudo])] : 0,
         c.pairs.map(x => [x.id, x.t, x.r, x.prog, x.seat, withVotes ? x.votes : 0])
     ]);
 }
@@ -462,8 +482,8 @@ function classCardHTML(c) {
                         ${c.pairs.length} binôme(s) ·
                         tour ${c.round}: ${c.cast}/${c.n} vote(s) ·
                         <span class="tag">${PHASES[c.phase]}</span>
-                        ${c.doubleVote ? `<span class="tag">2 binômes / bulletin</span>` : ""}
-                        ${c.useCodes ? `<span class="tag">codes de vote</span>` : ""}
+                        ${c.doubleVote ? `<span class="tag">jusqu'à 2 binômes / bulletin</span>` : ""}
+                        ${c.needApproval ? `<span class="tag">élèves à valider</span>` : ""}
                     </p>
                 </div>
                 <div class="code" aria-label="Code ${k}">${digits}</div>
@@ -474,7 +494,6 @@ function classCardHTML(c) {
                 <button onclick="phase('${k}','vote')">Ouvrir le vote</button>
                 <button class="go" onclick="phase('${k}','res')">Publier les résultats</button>
                 <button onclick="showLive('${k}')">Suivre en direct</button>
-                ${c.useCodes ? `<button onclick="showCodes('${k}')">Codes de vote</button>` : ""}
                 <button class="danger" onclick="del('${k}')">Supprimer</button>
             </div>
 
@@ -676,7 +695,11 @@ function viewVoter(m) {
     }
     picked = picked.filter(id => running.some(x => x.id === id));
 
-    const canVote = !voted && c.phase === "vote";
+    /* Validation par le professeur : sans elle, pas de bulletin */
+    const accessOK = !c.needApproval || myAccess.status === "approved";
+    const waiting  = c.needApproval && myAccess.status === "pending";
+    const showForm = c.needApproval && !accessOK && !waiting && c.phase !== "res";
+    const canVote  = !voted && c.phase === "vote" && accessOK;
 
     /* Message d'état : il change tout seul avec la phase et le tour */
     let status;
@@ -686,9 +709,31 @@ function viewVoter(m) {
     } else if (voted) {
         status = `<p class="notice">Ton bulletin est enregistré pour ce tour ✅ Attends la fin du tour…</p>`;
     } else {
-        const choose = picks > 1 ? ` Tu choisis <b>${picks} binômes différents</b>.` : "";
+        const choose = picks > 1 ? ` Tu peux choisir <b>1 ou 2 binômes</b> (le deuxième est facultatif).` : "";
 
         status = `<p class="notice">Tour ${c.round} : élection ${seatLabel(c)} sur ${c.seats}. Il faut la majorité absolue des suffrages exprimés (blancs et abstentions non comptés).${choose}</p>`;
+    }
+
+    /* Accès au vote : demande au professeur */
+    let accessHTML = "";
+
+    if (waiting) {
+        accessHTML = `<p class="notice">⏳ Demande envoyée${myAccess.pseudo ? " (" + esc(myAccess.pseudo) + ")" : ""}. Attends que ton professeur te valide : tu pourras voter dès que ce sera fait.</p>`;
+    } else if (showForm) {
+        const refused = myAccess.status === "refused"
+            ? `<p class="notice">Ton professeur a refusé ta demande. Va le voir si c'est une erreur, puis refais une demande.</p>`
+            : "";
+
+        accessHTML = `
+            ${refused}
+            <form class="box" onsubmit="event.preventDefault(); requestAccess()">
+                <h2>Accès au vote</h2>
+                <p class="muted">Ton professeur doit te valider avant que tu puisses voter. Indique ton prénom (ou un pseudo qu'il reconnaîtra) : il ne sera pas conservé après sa décision.</p>
+                <input id="pseudo" maxlength="40" autocomplete="off"
+                       placeholder="Ton prénom ou pseudo" aria-label="Ton prénom ou pseudo">
+                ${m}
+                <button class="go">Demander l'accès</button>
+            </form>`;
     }
 
     const electedHTML = elected.length
@@ -700,23 +745,17 @@ function viewVoter(m) {
         .join("")
         || `<p class="muted">Aucun binôme candidat pour l'instant.</p>`;
 
-    /* Bulletin : validation, vote blanc, abstention (+ code de vote si exigé) */
-    const ready = picks > 0 && picked.length === picks;
-
-    const codeField = c.useCodes
-        ? `<input id="vc" class="code-in" maxlength="6" autocomplete="off" autocapitalize="characters"
-                  spellcheck="false" placeholder="CODE" value="${esc(voteCode)}"
-                  oninput="saveCode(this.value)" aria-label="Ton code de vote personnel">
-           <p class="muted">Entre le code personnel remis par ton professeur.</p>`
-        : "";
+    /* Bulletin : validation, vote blanc, abstention */
+    const ready = picks > 0 && picked.length >= 1 && picked.length <= picks;
 
     const ballotBox = canVote
         ? `<div class="box ballot">
                <h2>Ton bulletin</h2>
                <p class="muted">${picks > 0
-                   ? `Binôme${picks > 1 ? "s" : ""} choisi${picks > 1 ? "s" : ""} : ${picked.length} / ${picks}`
+                   ? (picks > 1
+                       ? `Binômes choisis : ${picked.length} (1 ou 2, comme tu veux)`
+                       : `Binôme choisi : ${picked.length} / 1`)
                    : "Aucun binôme en lice : tu peux seulement voter blanc ou t'abstenir."}</p>
-               ${codeField}
                ${m}
                <button class="go" onclick="ballot('pair')" ${ready ? "" : "disabled"}>Valider mon vote</button>
                <div class="row">
@@ -733,7 +772,8 @@ function viewVoter(m) {
 
         ${c.phase === "vote" ? lastRoundNotice(c) : ""}
         ${status}
-        ${canVote ? "" : m}
+        ${canVote || showForm ? "" : m}
+        ${accessHTML}
 
         ${electedHTML}
 
@@ -788,14 +828,15 @@ function viewDashboard(m) {
 
             <label class="opt">
                 <input type="checkbox" id="dbl">
-                <span><b>Chaque élève vote pour 2 binômes</b> en une seule fois.
-                Les 2 binômes peuvent alors être élus dans le même tour.</span>
+                <span><b>Chaque élève peut voter pour 1 ou 2 binômes</b> en une seule fois
+                (le deuxième est facultatif). Les 2 binômes peuvent alors être élus dans le même tour.</span>
             </label>
 
             <label class="opt">
                 <input type="checkbox" id="cod" checked>
-                <span><b>Codes de vote individuels</b> : un code par élève, à distribuer sur papier.
-                Empêche de voter deux fois en navigation privée. Sans codes, rien ne bloque ce contournement.</span>
+                <span><b>Validation des élèves par le professeur</b> : chaque élève envoie son prénom,
+                tu le valides en un clic. Limite à un bulletin par élève présent et permet de repérer
+                quelqu'un qui revote en navigation privée. Sans cette option, rien ne bloque ce contournement.</span>
             </label>
 
             ${m}
@@ -810,6 +851,58 @@ function viewDashboard(m) {
 
 
 /* --- 5.4 Direct (professeur) et résultats ---------------------------- */
+
+/* Demandes d'accès à valider (professeur) */
+function accessBoxHTML(c) {
+    if (!c.needApproval) {
+        return "";
+    }
+
+    const known    = loadApproved(c.code);
+    const pending  = access.filter(a => a.status === "pending");
+    const approved = access.filter(a => a.status === "approved").length;
+
+    /* Prénoms déjà vus : validés sur cet appareil + autres demandes en attente */
+    const count = {};
+    known.forEach(k => { count[fold(k.pseudo)] = (count[fold(k.pseudo)] || 0) + 1; });
+    pending.forEach(a => { count[fold(a.pseudo)] = (count[fold(a.pseudo)] || 0) + 1; });
+
+    const rows = pending.map(a => {
+        const dup = count[fold(a.pseudo)] > 1
+            ? ` <span class="tag warn">⚠ doublon possible</span>`
+            : "";
+
+        return `
+            <div class="row between access-row">
+                <span><b>${esc(a.pseudo)}</b>${dup}</span>
+                <span class="row">
+                    <button class="go" onclick="decide('${a.voter_id}', true)">Valider</button>
+                    <button class="danger" onclick="decide('${a.voter_id}', false)">Refuser</button>
+                </span>
+            </div>`;
+    }).join("") || `<p class="muted">Aucune demande en attente.</p>`;
+
+    const knownHTML = known.length
+        ? `<p class="muted small">Validés sur cet appareil :</p>
+           ${known.map(k => `
+               <div class="row between access-row">
+                   <span>${esc(k.pseudo)}</span>
+                   <button class="link" onclick="decide('${k.id}', false)">Retirer</button>
+               </div>`).join("")}`
+        : "";
+
+    return `
+        <div class="box">
+            <div class="row between">
+                <h2>Élèves à valider</h2>
+                <span>${approved} validé(s) / ${c.n}</span>
+            </div>
+            <p class="muted small">Chaque élève envoie son prénom ou un pseudo : valide-le si tu le reconnais. Le nom est effacé de la base dès ta décision. Un même prénom qui revient (ex : en navigation privée) est signalé : refuse-le.</p>
+            ${rows}
+            ${knownHTML}
+        </div>`;
+}
+
 
 function viewLive(m) {
     const c       = C();
@@ -871,6 +964,8 @@ function viewLive(m) {
             <div class="bar" aria-hidden="true"><i style="width:${percent(c.cast, c.n)}%"></i></div>
             <p class="muted">${ballotsLine(c.valid, c.blank, c.abst)}</p>
         </div>
+
+        ${accessBoxHTML(c)}
 
         ${verdict}
         ${m}
@@ -942,39 +1037,6 @@ function viewResults() {
 }
 
 
-/* --- 5.4 bis Codes de vote (professeur) ------------------------------ */
-
-function viewCodes(m) {
-    const c = C();
-
-    if (!c.useCodes) {
-        return `
-            <h1>Codes de vote · ${esc(c.name)}</h1>
-            <p class="notice">Cette élection n'utilise pas de codes de vote.</p>
-            <button class="link" onclick="go('dash')">← Tableau de bord</button>`;
-    }
-
-    const list = codes
-        .map(x => `<span class="vcode">${esc(x)}</span>`)
-        .join("");
-
-    return `
-        <h1>Codes de vote · ${esc(c.name)}</h1>
-        <p class="muted">Un code par élève (${c.n}), valable pour tous les tours : chaque code ne peut servir qu'une fois par tour.
-        Découpe la liste et remets un code à chaque élève. Ouvrir un onglet privé ne permet plus de revoter sans un autre code.
-        Les codes ne sont reliés à aucun vote : le scrutin reste anonyme.</p>
-
-        ${m}
-
-        <div class="codes-grid">${list}</div>
-
-        <div class="row no-print">
-            <button class="go" onclick="window.print()">Imprimer</button>
-            <button class="link" onclick="go('dash')">← Tableau de bord</button>
-        </div>`;
-}
-
-
 /* --- 5.5 Routeur ----------------------------------------------------- */
 
 const VIEWS = {
@@ -985,8 +1047,7 @@ const VIEWS = {
     cand:   viewCandidate,
     vote:   viewVoter,
     res:    viewResults,
-    live:   viewLive,
-    codes:  viewCodes
+    live:   viewLive
 };
 
 function render() {
@@ -1098,26 +1159,16 @@ async function newClass() {
     const name       = $("#cn").value.trim();
     const n          = parseInt($("#nb").value, 10);
     const doubleVote = $("#dbl").checked;
-    const useCodes   = $("#cod").checked;
+    const needApproval = $("#cod").checked;
 
     if (!name || !(n >= 1)) {
         return err("Renseigne la classe et le nombre d'élèves.");
     }
 
-    let code;
-
     try {
-        code = await api.createClass(name, n, doubleVote, useCodes);
+        await api.createClass(name, n, doubleVote, needApproval);
     } catch (e) {
         return err(explain(e));
-    }
-
-    if (useCodes) {
-        try {
-            await api.generateCodes(code);
-        } catch (e) {
-            return go("dash", "Élection créée, mais les codes n'ont pas pu être générés : ouvre « Codes de vote » pour réessayer.");
-        }
     }
 
     go("dash");
@@ -1138,10 +1189,27 @@ function showLive(k) {
     go("live");
 }
 
-/* Liste imprimable des codes de vote */
-function showCodes(k) {
-    cur = k;
-    go("codes");
+/* Valide (ok = true) ou refuse / retire (ok = false) un élève */
+async function decide(id, ok) {
+    const request = access.find(a => a.voter_id === id);
+
+    try {
+        await api.decideAccess(cur, id, ok);
+
+        /* Mémoire locale (appareil du professeur) pour repérer les doublons */
+        let list = loadApproved(cur);
+
+        if (ok && request) {
+            list.push({ id, pseudo: request.pseudo });
+        } else if (!ok) {
+            list = list.filter(k => k.id !== id);
+        }
+        saveApproved(cur, list);
+
+        go("live");
+    } catch (e) {
+        go("live", explain(e));
+    }
 }
 
 /* Clôture le tour : le serveur désigne l'élu (majorité absolue) ou relance un tour */
@@ -1261,6 +1329,22 @@ function pick(id) {
     softRender();
 }
 
+/* Élève : envoie son prénom/pseudo au professeur */
+async function requestAccess() {
+    const pseudo = $("#pseudo").value.trim();
+
+    if (!pseudo) {
+        return err("Indique ton prénom ou un pseudo que ton professeur reconnaîtra.");
+    }
+
+    try {
+        await api.requestAccess(cur, pseudo);
+        go("vote");
+    } catch (e) {
+        err(explain(e));
+    }
+}
+
 /* Dépose le bulletin : kind = "pair" (binôme[s] cochés), "blank" ou "abstain" */
 async function ballot(kind) {
     const c = C();
@@ -1269,8 +1353,8 @@ async function ballot(kind) {
         return;
     }
 
-    if (c.useCodes && voteCode.length !== 6) {
-        return err("Entre ton code de vote personnel (6 caractères).");
+    if (c.needApproval && myAccess.status !== "approved") {
+        return err("Ton accès au vote n'a pas encore été validé par le professeur.");
     }
 
     let question;
@@ -1279,10 +1363,8 @@ async function ballot(kind) {
     if (kind === "pair") {
         const k = ballotPicks(c);
 
-        if (k < 1 || picked.length !== k) {
-            return err(k > 1
-                ? "Choisis " + k + " binômes différents avant de valider."
-                : "Choisis un binôme avant de valider.");
+        if (k < 1 || picked.length < 1 || picked.length > k) {
+            return err("Choisis au moins un binôme avant de valider (ou vote blanc / abstention).");
         }
 
         ids = picked.slice();
@@ -1305,11 +1387,11 @@ async function ballot(kind) {
     }
 
     try {
-        await api.castBallot(cur, kind, ids, voteCode);
+        await api.castBallot(cur, kind, ids);
         picked = [];
         go("vote");
     } catch (e) {
-        go("vote", explain(e));   // ex : « Ce code de vote a déjà servi pour ce tour. »
+        go("vote", explain(e));   // ex : « Ton accès au vote n'a pas été validé. »
     }
 }
 
@@ -1376,6 +1458,14 @@ async function poll() {
 
         if (view === "vote") {
             voted = await api.hasVoted(cur);
+
+            if (fresh.needApproval) {
+                myAccess = await api.myAccess(cur);
+            }
+        }
+
+        if (view === "live" && prof && fresh.needApproval) {
+            access = await api.accessRows(cur);
         }
 
         const sig = view + "|" + signature(fresh, voted);
