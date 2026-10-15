@@ -346,6 +346,10 @@ async function go(v, m) {
     view = v;
     msg  = m || "";
 
+    if (location.hash.startsWith("#/")) {
+        history.replaceState(null, "", location.pathname + location.search);
+    }
+
     try {
         await refresh();
     } catch (e) {
@@ -1067,6 +1071,7 @@ function render() {
     lastDashSig = view === "dash" ? dashSig(myClasses) : "";
 
     syncRealtime();
+    setTitle();
 }
 
 
@@ -1609,7 +1614,340 @@ document.addEventListener("visibilitychange", () => {
 
 
 /* ==========================================================================
-   8. DÉMARRAGE Emerick
+   8. THÈME, COOKIES ET PAGES LÉGALES
+   ========================================================================== */
+
+/* --- 8.1 Cookies maison (le jeton de session Supabase est géré à part) -- */
+
+const CONSENT_KEY = "cv_consent";   // « all » ou « essential », 6 mois
+const THEME_KEY   = "cv_theme";     // « light » ou « dark », seulement si « all »
+const COOKIE_DAYS = 180;
+
+function readCookie(name) {
+    const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+    return m ? decodeURIComponent(m[1]) : null;
+}
+
+function writeCookie(name, value, days) {
+    const secure = location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${days * 86400}; path=/; SameSite=Lax${secure}`;
+}
+
+function eraseCookie(name) {
+    document.cookie = `${name}=; max-age=0; path=/; SameSite=Lax`;
+}
+
+
+/* --- 8.2 Mode sombre ---------------------------------------------------- */
+
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+const currentTheme = () => document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+
+function setTheme(theme, persist) {
+    document.documentElement.dataset.theme = theme;
+
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+        meta.content = theme === "dark" ? "#0B1020" : "#F2F4F9";
+    }
+
+    const btn = $("#theme-btn");
+    if (btn) {
+        btn.setAttribute("aria-label", theme === "dark" ? "Passer en mode clair" : "Passer en mode sombre");
+    }
+
+    /* Mémorisé uniquement si l'utilisateur a accepté les cookies de préférence */
+    if (persist && readCookie(CONSENT_KEY) === "all") {
+        writeCookie(THEME_KEY, theme, COOKIE_DAYS);
+    }
+}
+
+function toggleTheme() {
+    setTheme(currentTheme() === "dark" ? "light" : "dark", true);
+}
+
+/* Sans choix mémorisé, on suit le réglage du système en direct */
+darkQuery.addEventListener("change", e => {
+    if (!readCookie(THEME_KEY)) {
+        setTheme(e.matches ? "dark" : "light");
+    }
+});
+
+setTheme(currentTheme());
+
+
+/* --- 8.3 Bandeau de consentement --------------------------------------- */
+
+function showConsent(custom) {
+    const prefs = readCookie(CONSENT_KEY) === "all";
+
+    const body = custom
+        ? `
+            <label class="opt">
+                <input type="checkbox" checked disabled>
+                <span><b>Essentiels</b> (toujours actifs) : connexion anonyme ou professeur, mémorisation de ton choix.</span>
+            </label>
+            <label class="opt">
+                <input type="checkbox" id="ck-pref" ${prefs ? "checked" : ""}>
+                <span><b>Préférences</b> : retenir ton thème clair ou sombre.</span>
+            </label>
+            <div class="row">
+                <button class="go" onclick="saveConsent()">Enregistrer mes choix</button>
+                <button class="link" onclick="showConsent(false)">Retour</button>
+            </div>`
+        : `
+            <p class="muted small">
+                Ce site utilise uniquement le stockage nécessaire à son fonctionnement.
+                Tu peux en plus autoriser la mémorisation de ton thème. Aucun cookie publicitaire
+                ni de mesure d'audience. <a href="#/cookies">En savoir plus</a>
+            </p>
+            <div class="row">
+                <button class="go" onclick="setConsent('essential')">Tout refuser</button>
+                <button class="go" onclick="setConsent('all')">Tout accepter</button>
+                <button class="link" onclick="showConsent(true)">Personnaliser</button>
+            </div>`;
+
+    $("#consent-root").innerHTML = `
+        <section class="consent" role="dialog" aria-labelledby="ck-t">
+            <div class="consent-card">
+                <h2 id="ck-t">🍪 Cookies</h2>
+                ${body}
+            </div>
+        </section>`;
+
+    const first = $("#consent-root button, #consent-root input:not([disabled])");
+    if (first && custom) {
+        first.focus();
+    }
+}
+
+function setConsent(value) {
+    writeCookie(CONSENT_KEY, value, COOKIE_DAYS);
+
+    if (value === "all") {
+        writeCookie(THEME_KEY, currentTheme(), COOKIE_DAYS);
+    } else {
+        eraseCookie(THEME_KEY);
+    }
+
+    $("#consent-root").innerHTML = "";
+}
+
+function saveConsent() {
+    setConsent($("#ck-pref").checked ? "all" : "essential");
+}
+
+
+/* --- 8.4 Contenu des pages légales ------------------------------------- */
+
+const TODO = t => `<mark class="todo">[${t}]</mark>`;
+const UPDATED = "15 octobre 2026";
+
+const SLUGS = {
+    legal:   "mentions-legales",
+    cgu:     "cgu",
+    cookies: "cookies"
+};
+
+const PAGE_TITLES = {
+    legal:   "Mentions légales",
+    cgu:     "Conditions générales d'utilisation",
+    cookies: "Cookies et données personnelles",
+    nf:      "Page introuvable"
+};
+
+const STATIC_VIEWS = Object.keys(PAGE_TITLES);
+
+let backView = "home";   // écran où revenir en quittant une page légale
+
+const docHTML = (title, body) => `
+    <article class="doc">
+        <h1>${title}</h1>
+        <p class="muted small">Dernière mise à jour : ${UPDATED}</p>
+        ${body}
+        <div class="row"><button class="link" onclick="closePage()">← Retour à l'application</button></div>
+    </article>`;
+
+function viewLegal() {
+    return docHTML("Mentions légales", `
+        <h2>Éditeurs du site</h2>
+        <p>ClassVote est édité par <b>Enzo Perdu</b> et <b>Emerick Woiret</b>, personnes physiques.
+           Contact : ${TODO("adresse e-mail de contact à compléter")}</p>
+
+        <h2>Directeurs de la publication</h2>
+        <p>Enzo Perdu et Emerick Woiret.</p>
+
+        <h2>Hébergement</h2>
+        <p>Site : ${TODO("nom, adresse et téléphone de l'hébergeur à compléter")}</p>
+        <p>Base de données et authentification : Supabase (supabase.com).</p>
+
+        <h2>Propriété intellectuelle</h2>
+        <p>© 2026 Enzo Perdu et Emerick Woiret. Tous droits réservés.</p>
+        <p>Le nom ClassVote, le code source, la conception graphique, les textes et l'organisation
+           de ce site sont la propriété exclusive d'Enzo Perdu et d'Emerick Woiret, ses auteurs.
+           Toute reproduction, représentation, modification ou exploitation, totale ou partielle,
+           sans leur autorisation écrite préalable est interdite
+           (articles L.111-1, L.122-4 et L.335-2 du Code de la propriété intellectuelle).</p>
+        <p>Les contenus saisis par les utilisateurs (prénoms, programmes) restent leur propriété ;
+           ils autorisent seulement leur affichage dans l'élection concernée.</p>
+        <p>Éléments tiers : polices Big Shoulders Display et Public Sans (licence SIL OFL, via Google Fonts)
+           et bibliothèque Supabase JS (licence MIT).</p>
+
+        <h2>Responsabilité</h2>
+        <p>Le site est fourni sans garantie de disponibilité continue. Les éditeurs ne peuvent être tenus
+           responsables d'une interruption, d'une perte de données ou d'un usage non conforme du service.</p>
+
+        <h2>Données personnelles</h2>
+        <p>Voir la page <a href="#/cookies">Cookies et données personnelles</a>.</p>
+
+        <h2>Droit applicable</h2>
+        <p>Le droit français s'applique. En cas de litige, les tribunaux français sont compétents,
+           sous réserve des règles protégeant les consommateurs.</p>`);
+}
+
+function viewCgu() {
+    return docHTML("Conditions générales d'utilisation", `
+        <h2>1. Objet</h2>
+        <p>ClassVote permet d'organiser l'élection des délégués d'une classe : candidatures en binôme
+           (titulaire et remplaçant), vote anonyme, résultats. Utiliser le site vaut acceptation des présentes conditions.</p>
+
+        <h2>2. Rôles</h2>
+        <ul>
+            <li><b>Professeur</b> : crée un compte, ouvre une élection, valide les élèves si besoin, ouvre le vote, publie les résultats.</li>
+            <li><b>Élève</b> : entre le code à 6 chiffres, peut se porter candidat ou voter, sans compte.</li>
+        </ul>
+        <p>Le service est prévu pour un usage scolaire. Les élèves mineurs l'utilisent sous la responsabilité du professeur qui organise l'élection.</p>
+
+        <h2>3. Règles du vote</h2>
+        <ul>
+            <li>Chaque appareil dispose d'un seul bulletin par tour.</li>
+            <li>Le vote blanc et l'abstention sont possibles. Un bulletin validé est définitif.</li>
+            <li>Un binôme est élu à la majorité absolue des suffrages exprimés ; sinon un nouveau tour a lieu.</li>
+        </ul>
+
+        <h2>4. Comportement attendu</h2>
+        <p>Il est interdit de saisir des contenus injurieux, discriminatoires, diffamatoires ou illicites, d'usurper l'identité d'autrui,
+           de voter plusieurs fois par des moyens détournés ou de perturber le service (attaque, automatisation, tentative d'accès non autorisé).
+           Utilise uniquement des prénoms ou pseudos : pas de nom de famille ni d'information sensible.
+           Le professeur peut supprimer une élection ou une candidature.</p>
+
+        <h2>5. Compte professeur</h2>
+        <p>Le professeur est responsable de la confidentialité de son mot de passe et des élections qu'il crée.</p>
+
+        <h2>6. Données personnelles</h2>
+        <p>Le traitement des données est décrit dans la page <a href="#/cookies">Cookies et données personnelles</a>.</p>
+
+        <h2>7. Propriété intellectuelle</h2>
+        <p>Le site appartient à Enzo Perdu et Emerick Woiret (voir les <a href="#/mentions-legales">mentions légales</a>).
+           Aucun droit sur le code, le nom ou le design n'est cédé aux utilisateurs.</p>
+
+        <h2>8. Responsabilité et disponibilité</h2>
+        <p>Le service est fourni « en l'état », sans garantie d'absence d'erreur ou d'interruption.
+           Les résultats ont une valeur pédagogique ; ils n'ont pas de valeur d'élection officielle.</p>
+
+        <h2>9. Modification des conditions</h2>
+        <p>Les CGU peuvent évoluer ; la version en ligne fait foi, avec sa date de mise à jour.</p>
+
+        <h2>10. Droit applicable et contact</h2>
+        <p>Droit français. Contact : ${TODO("adresse e-mail de contact à compléter")}</p>`);
+}
+
+function viewCookies() {
+    return docHTML("Cookies et données personnelles", `
+        <h2>Ce qui est stocké sur ton appareil</h2>
+        <div class="scroll"><table>
+            <tr><th>Nom</th><th>Rôle</th><th>Durée</th><th>Consentement</th></tr>
+            <tr><td>Session (sb-…-auth-token)</td><td>Te reconnaître : session anonyme de l'élève ou connexion du professeur</td><td>Jusqu'à déconnexion</td><td>Non requis (essentiel)</td></tr>
+            <tr><td>cv_consent</td><td>Retenir ton choix sur les cookies</td><td>6 mois</td><td>Non requis (essentiel)</td></tr>
+            <tr><td>cv_theme</td><td>Retenir ton thème clair ou sombre</td><td>6 mois</td><td>Oui (préférences)</td></tr>
+            <tr><td>approved:… (professeur)</td><td>Repérer les doublons d'élèves, uniquement sur l'appareil du professeur</td><td>Jusqu'à effacement</td><td>Non requis (essentiel)</td></tr>
+        </table></div>
+        <p>Aucun cookie publicitaire, aucun outil de mesure d'audience, aucun suivi entre sites.</p>
+        <div class="row"><button onclick="showConsent(true)">Modifier mes choix</button></div>
+
+        <h2>Responsables du traitement</h2>
+        <p>Enzo Perdu et Emerick Woiret. Contact : ${TODO("adresse e-mail de contact à compléter")}</p>
+
+        <h2>Données traitées</h2>
+        <ul>
+            <li>Professeur : adresse e-mail et mot de passe (chiffré par Supabase), élections créées.</li>
+            <li>Élève : identifiant technique anonyme de l'appareil, prénoms des candidats, programme, bulletin (sans nom), prénom ou pseudo si la validation est activée.</li>
+        </ul>
+        <p>Finalités : faire fonctionner l'élection (exécution du service). Les données sont conservées tant que l'élection existe puis supprimées avec elle.
+           Elles sont hébergées chez Supabase, qui agit comme sous-traitant.</p>
+        <p>Les polices sont chargées depuis Google Fonts : ton adresse IP est alors transmise à Google.</p>
+
+        <h2>Tes droits</h2>
+        <p>Tu peux demander l'accès, la rectification ou l'effacement de tes données, ou t'opposer à leur traitement, en écrivant à l'adresse de contact.
+           Tu peux aussi introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr/fr/plaintes</a>).</p>`);
+}
+
+function viewNotFound() {
+    return `
+        <section class="nf doc">
+            <div class="num" aria-hidden="true">404</div>
+            <span class="stamp">Bulletin nul</span>
+            <h1>Page introuvable</h1>
+            <p class="muted">Cette page n'existe pas ou a été déplacée.</p>
+            <button class="go" onclick="closePage()">Retour à l'accueil</button>
+        </section>`;
+}
+
+Object.assign(VIEWS, {
+    legal:   viewLegal,
+    cgu:     viewCgu,
+    cookies: viewCookies,
+    nf:      viewNotFound
+});
+
+
+/* --- 8.5 Routage des pages légales (#/cgu, #/cookies…) ----------------- */
+
+function pageFromHash() {
+    if (!location.hash.startsWith("#/")) {
+        return null;
+    }
+
+    const slug = location.hash.slice(2);
+    return Object.keys(SLUGS).find(k => SLUGS[k] === slug) || "nf";
+}
+
+function syncHash() {
+    const page = pageFromHash();
+
+    if (page) {
+        if (!STATIC_VIEWS.includes(view)) {
+            backView = view;
+        }
+        view = page;
+        render();
+        window.scrollTo(0, 0);
+    } else if (STATIC_VIEWS.includes(view)) {
+        go(backView);
+    }
+}
+
+function closePage() {
+    go(backView === "nf" ? "home" : backView);
+}
+
+function setTitle() {
+    document.title = PAGE_TITLES[view]
+        ? PAGE_TITLES[view] + " · ClassVote"
+        : "Élection des délégués";
+}
+
+window.addEventListener("hashchange", syncHash);
+window.addEventListener("popstate", syncHash);
+
+if (!readCookie(CONSENT_KEY)) {
+    showConsent(false);
+}
+
+
+/* ==========================================================================
+   9. DÉMARRAGE Emerick
    ========================================================================== */
 
 (async () => {
@@ -1620,6 +1958,12 @@ document.addEventListener("visibilitychange", () => {
         /* Un professeur déjà connecté retrouve directement son tableau de bord */
         if (!user.is_anonymous) {
             prof = user.id;
+
+            if (pageFromHash()) {
+                view = "dash";
+                return syncHash();
+            }
+
             return go("dash");
         }
     } catch (e) {
@@ -1628,5 +1972,9 @@ document.addEventListener("visibilitychange", () => {
         console.warn("Session non établie au démarrage :", e);
     }
 
-    render();
+    if (pageFromHash()) {
+        syncHash();
+    } else {
+        render();
+    }
 })();

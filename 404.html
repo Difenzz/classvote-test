@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="robots" content="noindex">
+        <title>Page introuvable · ClassVote</title>
+
+        <script>
+            (function () {
+                var m = document.cookie.match(/(?:^|; )cv_theme=(light|dark)/);
+                var dark = m ? m[1] === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+                document.documentElement.dataset.theme = dark ? "dark" : "light";
+            })();
+        </script>
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=Public+Sans:wght@400;600;700&display=swap">
+
+        <!-- Page autonome : elle doit s'afficher quel que soit le chemin demandé -->
+        <style>
+            :root {
+                color-scheme: light;
+                --bg: #F2F4F9; --surface: #fff; --ink: #0F1B3D; --ink-2: #56607F; --line: #D8DEEC;
+                --blue: #1E3FCC; --blue-dark: #142C99; --on-blue: #fff; --press: #0C1E70; --red: #D42F3E;
+                --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+                --text: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            }
+            :root[data-theme="dark"] {
+                color-scheme: dark;
+                --bg: #0B1020; --surface: #131A33; --ink: #E8ECFA; --ink-2: #A3ADCC; --line: #29335A;
+                --blue: #7C95FF; --blue-dark: #9DB0FF; --on-blue: #0B1020; --press: #4A62C4; --red: #FF7482;
+            }
+            * { box-sizing: border-box; }
+            body {
+                margin: 0; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto;
+                background: var(--bg); color: var(--ink); font: 400 16px/1.5 var(--text);
+            }
+            .stripe { height: 4px; background: linear-gradient(90deg, var(--blue) 0 33.4%, var(--surface) 33.4% 66.6%, var(--red) 66.6%); }
+            main { display: grid; place-items: center; padding: 24px 16px; }
+            .card {
+                width: 100%; max-width: 480px; padding: clamp(24px, 6vw, 40px); text-align: center;
+                background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+                box-shadow: 0 1px 0 var(--line), 0 18px 28px -24px rgba(15, 27, 61, .45);
+            }
+            .num { font: 800 clamp(110px, 30vw, 170px)/.9 var(--display); color: var(--blue); }
+            .stamp {
+                display: inline-block; margin: 6px 0 14px; padding: 4px 16px; border: 4px solid var(--red);
+                border-radius: 10px; color: var(--red); font: 800 28px/1.1 var(--display);
+                letter-spacing: .06em; transform: rotate(-6deg);
+            }
+            h1 { margin: 0 0 6px; font: 800 clamp(32px, 7vw, 44px)/1 var(--display); }
+            p { margin: 0 0 22px; color: var(--ink-2); }
+            .btn {
+                display: inline-block; padding: 12px 22px; border-radius: 12px; background: var(--blue);
+                color: var(--on-blue); font-weight: 700; text-decoration: none; box-shadow: 0 3px 0 var(--press);
+            }
+            .btn:hover { background: var(--blue-dark); }
+            .btn:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+            footer { padding: 20px 16px calc(24px + env(safe-area-inset-bottom)); text-align: center; color: var(--ink-2); font-size: 14px; }
+            footer a { color: var(--ink); font-weight: 600; margin: 0 8px; }
+        </style>
+    </head>
+
+    <body>
+        <div class="stripe"></div>
+
+        <main>
+            <section class="card">
+                <div class="num" aria-hidden="true">404</div>
+                <span class="stamp">Bulletin nul</span>
+                <h1>Page introuvable</h1>
+                <p>Cette page n'existe pas ou a été déplacée.</p>
+                <a class="btn" id="home" href="/">Retour à l'accueil</a>
+            </section>
+        </main>
+
+        <footer>
+            <a id="l1" href="/#/mentions-legales">Mentions légales</a>
+            <a id="l2" href="/#/cgu">CGU</a>
+            <a id="l3" href="/#/cookies">Cookies</a>
+            <p style="margin:10px 0 0">© 2026 Enzo Perdu et Emerick Woiret. Tous droits réservés.</p>
+        </footer>
+
+        <script>
+            /* Sur GitHub Pages (site de projet), la racine est /nom-du-depot/ */
+            var seg = location.pathname.split("/")[1];
+            var base = location.hostname.slice(-10) === ".github.io" && seg ? "/" + seg + "/" : "/";
+            document.getElementById("home").href = base;
+            document.getElementById("l1").href = base + "#/mentions-legales";
+            document.getElementById("l2").href = base + "#/cgu";
+            document.getElementById("l3").href = base + "#/cookies";
+        </script>
+    </body>
+
+</html>

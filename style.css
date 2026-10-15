@@ -7,6 +7,9 @@
     /* Couleurs */
     --bg:         #F2F4F9;
     --surface:    #fff;
+    --field:      #fff;
+    --on-blue:    #fff;
+    --press:      #0C1E70;
     --ink:        #0F1B3D;
     --ink-2:      #56607F;
     --line:       #D8DEEC;
@@ -26,7 +29,7 @@
     --text:    "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
     /* Forme */
-    --r: 12px;
+    --r: 16px;
 }
 
 
@@ -141,7 +144,7 @@ button {
     /* Action principale */
     &.go {
         background: var(--blue);
-        color: #fff;
+        color: var(--on-blue);
 
         &:hover {
             background: var(--blue-dark);
@@ -184,7 +187,7 @@ input, select, textarea {
     min-height: 48px;
     margin: 0 0 12px;
     padding: 11px 13px;
-    background: #fff;
+    background: var(--field);
     border: 2px solid var(--line);
     border-radius: 10px;
     color: inherit;
@@ -309,7 +312,7 @@ textarea {
 
     .e {
         background: var(--blue);
-        color: #fff;
+        color: var(--on-blue);
 
         &:hover {
             background: var(--blue-dark);
@@ -345,7 +348,7 @@ textarea {
         place-items: center;
         width: clamp(34px, 8vw, 48px);
         height: clamp(48px, 11vw, 64px);
-        background: #fff;
+        background: var(--surface);
         border: 2px solid var(--ink);
         border-radius: 8px;
         box-shadow: 0 3px 0 var(--ink);
@@ -460,4 +463,391 @@ button:disabled {
 .access-row {
     padding: 8px 0;
     border-top: 1px solid var(--line);
+}
+
+
+/* ==========================================================================
+   9. MODE SOMBRE
+   ========================================================================== */
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --bg:         #0B1020;
+    --surface:    #131A33;
+    --field:      #0E1430;
+    --ink:        #E8ECFA;
+    --ink-2:      #A3ADCC;
+    --line:       #29335A;
+    --on-blue:    #0B1020;
+    --press:      #4A62C4;
+
+    --blue:       #7C95FF;
+    --blue-dark:  #9DB0FF;
+    --blue-soft:  #1B2756;
+
+    --red:        #FF7482;
+    --red-soft:   #3A1824;
+
+    --green:      #4FD19A;
+    --green-soft: #12332A;
+}
+
+:root[data-theme="dark"] .box,
+:root[data-theme="dark"] .consent-card {
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 14px 30px -20px #000;
+}
+
+
+/* ==========================================================================
+   10. STRUCTURE : barre du haut, contenu, pied de page
+   ========================================================================== */
+
+body {
+    display: flex;
+    flex-direction: column;
+    transition: background-color .2s, color .2s;
+}
+
+::selection {
+    background: var(--blue);
+    color: var(--on-blue);
+}
+
+#app {
+    flex: 1 0 auto;
+    width: 100%;
+    align-content: start;
+}
+
+.skip {
+    position: absolute;
+    left: 12px;
+    top: -60px;
+    z-index: 100;
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: var(--ink);
+    color: var(--bg);
+    font-weight: 700;
+    transition: top .15s;
+
+    &:focus {
+        top: 10px;
+    }
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding-top: env(safe-area-inset-top, 0px);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+
+    /* Liseré bleu · blanc · rouge */
+    &::before {
+        content: "";
+        display: block;
+        height: 4px;
+        background: linear-gradient(90deg,
+            var(--blue) 0 33.4%, var(--surface) 33.4% 66.6%, var(--red) 66.6%);
+    }
+}
+
+.topbar-in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 8px clamp(16px, 4vw, 32px);
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+    font: 800 28px/1 var(--display);
+    letter-spacing: .01em;
+    text-decoration: none;
+
+    svg {
+        width: 30px;
+        height: 30px;
+    }
+}
+
+.icon-btn {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-color: var(--line);
+    border-radius: 999px;
+    color: var(--ink);
+
+    svg {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+:root[data-theme="dark"] .i-moon,
+:root:not([data-theme="dark"]) .i-sun {
+    display: none;
+}
+
+.footer {
+    flex: none;
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    max-width: 1000px;
+    margin: 24px auto 0;
+    padding: 24px clamp(16px, 4vw, 32px) calc(28px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    color: var(--ink-2);
+    font-size: 14px;
+
+    nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 20px;
+    }
+
+    a,
+    button.link {
+        min-height: 0;
+        padding: 4px 0;
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+
+        &:hover {
+            color: var(--blue);
+        }
+    }
+}
+
+
+/* ==========================================================================
+   11. FINITIONS DU DESIGN
+   ========================================================================== */
+
+h1 {
+    letter-spacing: -.01em;
+}
+
+h2 {
+    letter-spacing: .005em;
+}
+
+.box {
+    box-shadow: 0 1px 0 var(--line), 0 18px 28px -24px rgba(15, 27, 61, .45);
+}
+
+.narrow {
+    margin-top: 6vh;
+    padding: clamp(22px, 5vw, 34px);
+}
+
+/* Boutons : relief « touche » */
+button {
+    border-radius: 12px;
+    transition: background .15s, transform .08s, box-shadow .08s;
+
+    &:active:not(:disabled) {
+        transform: translateY(2px);
+    }
+
+    &.go {
+        box-shadow: 0 3px 0 var(--press);
+
+        &:active:not(:disabled) {
+            box-shadow: 0 1px 0 var(--press);
+        }
+    }
+}
+
+.hero button {
+    min-height: 132px;
+    box-shadow: 0 4px 0 var(--line);
+    letter-spacing: .01em;
+
+    &.e {
+        box-shadow: 0 4px 0 var(--press);
+    }
+
+    &.c {
+        box-shadow: 0 4px 0 var(--red);
+    }
+}
+
+/* Le code de classe ressemble à un talon de bulletin */
+.code span {
+    position: relative;
+    box-shadow: 0 4px 0 var(--ink);
+}
+
+.tag {
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.bar {
+    height: 12px;
+    box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.notice {
+    border-left: 4px solid var(--blue);
+}
+
+.box.winner {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 20%, transparent);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--blue);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+
+/* ==========================================================================
+   12. COOKIES
+   ========================================================================== */
+
+.consent {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+    padding: 12px clamp(12px, 3vw, 24px) calc(12px + env(safe-area-inset-bottom));
+    pointer-events: none;
+}
+
+.consent-card {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    max-width: 720px;
+    padding: clamp(16px, 3vw, 24px);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    box-shadow: 0 24px 60px -20px rgba(15, 27, 61, .55);
+    pointer-events: auto;
+
+    h2 {
+        font-size: 26px;
+    }
+}
+
+.consent-card .opt {
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+
+/* ==========================================================================
+   13. PAGES LÉGALES ET ERREUR 404
+   ========================================================================== */
+
+.doc {
+    display: grid;
+    gap: 14px;
+    max-width: 72ch;
+
+    h1 {
+        font-size: clamp(36px, 7vw, 52px);
+    }
+
+    h2 {
+        margin-top: 14px;
+        font-size: 26px;
+    }
+
+    p,
+    li {
+        line-height: 1.65;
+    }
+
+    ul {
+        margin: 0;
+        padding-left: 22px;
+    }
+
+    a {
+        color: var(--blue);
+        font-weight: 600;
+    }
+}
+
+.scroll {
+    overflow-x: auto;
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14.5px;
+    }
+
+    th,
+    td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+    }
+}
+
+.todo {
+    padding: 0 5px;
+    border-radius: 4px;
+    background: #FFE9A8;
+    color: #5A4300;
+}
+
+.nf {
+    justify-items: center;
+    max-width: 520px;
+    margin: 6vh auto 0;
+    text-align: center;
+}
+
+.nf .num {
+    position: relative;
+    font: 800 clamp(110px, 30vw, 190px)/.9 var(--display);
+    color: var(--blue);
+}
+
+/* Tampon « bulletin nul » */
+.stamp {
+    display: inline-block;
+    padding: 4px 16px;
+    border: 4px solid var(--red);
+    border-radius: 10px;
+    color: var(--red);
+    font: 800 30px/1.1 var(--display);
+    letter-spacing: .06em;
+    transform: rotate(-6deg);
 }
