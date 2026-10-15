@@ -405,7 +405,7 @@ textarea {
 
 
 /* ==========================================================================
-   8. OPTIONS, BULLETIN ET CODES DE VOTE
+   8. OPTIONS, BULLETIN ET VALIDATION DES ÉLÈVES
    ========================================================================== */
 
 /* Bouton inactif (ex : « Valider mon vote » tant que la sélection est incomplète) */
@@ -451,36 +451,13 @@ button:disabled {
     background: var(--blue-soft);
 }
 
-/* Code de vote personnel : plus étroit que les champs habituels */
-.ballot .code-in {
-    max-width: 260px;
-    margin-inline: auto;
+/* Alerte (ex : doublon possible dans les demandes d'accès) */
+.tag.warn {
+    background: var(--red-soft);
+    color: var(--red);
 }
 
-/* Liste des codes à distribuer */
-.codes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 10px;
-}
-
-.vcode {
-    padding: 12px 8px;
-    background: #fff;
-    border: 2px dashed var(--ink-2);
-    border-radius: 8px;
-    text-align: center;
-    font: 700 22px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-    letter-spacing: .12em;
-}
-
-@media print {
-
-    body {
-        background: #fff;
-    }
-
-    .no-print {
-        display: none;
-    }
+.access-row {
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
 }
