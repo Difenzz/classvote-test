@@ -1,0 +1,486 @@
+/* ==========================================================================
+   1. VARIABLES Enzo
+   ========================================================================== */
+
+:root {
+
+    /* Couleurs */
+    --bg:         #F2F4F9;
+    --surface:    #fff;
+    --ink:        #0F1B3D;
+    --ink-2:      #56607F;
+    --line:       #D8DEEC;
+
+    --blue:       #1E3FCC;
+    --blue-dark:  #142C99;
+    --blue-soft:  #E5EAFB;
+
+    --red:        #D42F3E;
+    --red-soft:   #FCE8EA;
+
+    --green:      #17724A;
+    --green-soft: #E0F3E9;
+
+    /* Typographie */
+    --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+    --text:    "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    /* Forme */
+    --r: 12px;
+}
+
+
+/* ==========================================================================
+   2. BASE Enzo
+   ========================================================================== */
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 16px/1.5 var(--text);
+}
+
+#app {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding:
+        max(20px, env(safe-area-inset-top))
+        clamp(16px, 4vw, 32px)
+        calc(40px + env(safe-area-inset-bottom));
+    display: grid;
+    gap: 18px;
+}
+
+:focus-visible {
+    outline: 3px solid var(--blue);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+
+/* ==========================================================================
+   3. TEXTE Emerick
+   ========================================================================== */
+
+h1, h2, h3, p {
+    margin: 0;
+}
+
+h1, h2 {
+    font-family: var(--display);
+    font-weight: 800;
+    line-height: 1;
+}
+
+h1 {
+    font-size: clamp(34px, 7vw, 56px);
+}
+
+h2 {
+    font-size: 28px;
+}
+
+.muted {
+    color: var(--ink-2);
+}
+
+.noscript {
+    padding: 24px;
+}
+
+.msg:empty {
+    display: none;
+}
+
+.msg {
+    min-height: 1.4em;
+    color: var(--red);
+    font-size: 14.5px;
+    font-weight: 600;
+
+    &:empty {
+        display: none;
+    }
+
+    &.ok {
+        color: var(--green);
+    }
+}
+
+
+/* ==========================================================================
+   4. BOUTONS Enzo
+   ========================================================================== */
+
+button {
+    min-height: 46px;
+    padding: 10px 18px;
+    border: 2px solid var(--blue);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--blue);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .15s;
+
+    &:hover {
+        background: var(--blue-soft);
+    }
+
+    /* Action principale */
+    &.go {
+        background: var(--blue);
+        color: #fff;
+
+        &:hover {
+            background: var(--blue-dark);
+            border-color: var(--blue-dark);
+        }
+    }
+
+    /* Action destructive */
+    &.danger {
+        color: var(--red);
+        border-color: var(--red);
+
+        &:hover {
+            background: var(--red-soft);
+        }
+    }
+
+    /* Bouton discret (retour, déconnexion…) */
+    &.link {
+        min-height: 40px;
+        padding: 8px 4px;
+        border: 0;
+        color: var(--ink-2);
+        text-decoration: underline;
+
+        &:hover {
+            background: none;
+            color: var(--blue);
+        }
+    }
+}
+
+
+/* ==========================================================================
+   5. CHAMPS DE FORMULAIRE Enzo
+   ========================================================================== */
+
+input, select, textarea {
+    width: 100%;
+    min-height: 48px;
+    margin: 0 0 12px;
+    padding: 11px 13px;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    color: inherit;
+    font: inherit;
+
+    &:focus {
+        outline: none;
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px var(--blue-soft);
+    }
+}
+
+textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+
+.code-in {
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: .2em;
+}
+
+
+/* ==========================================================================
+   6. COMPOSANTS Emerick
+   ========================================================================== */
+
+/* --- Carte ---------------------------------------------------------- */
+
+.box {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    padding: clamp(16px, 3vw, 24px);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+
+    > * {
+        margin-block: 0;
+    }
+}
+
+.narrow {
+    width: 100%;
+    max-width: 420px;
+    margin: 10vh auto 0;
+    text-align: center;
+}
+
+
+/* --- Ligne flexible ------------------------------------------------- */
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+
+    &.between {
+        justify-content: space-between;
+    }
+}
+
+
+/* --- Étiquette et avis ---------------------------------------------- */
+
+.tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--blue-soft);
+    color: var(--blue-dark);
+    font-size: 13.5px;
+    font-weight: 700;
+}
+
+.notice {
+    padding: 12px 16px;
+    border-radius: var(--r);
+    background: var(--blue-soft);
+    color: var(--blue-dark);
+    font-weight: 600;
+}
+
+
+/* --- Mises en page en colonnes -------------------------------------- */
+
+.split,
+.grid {
+    display: grid;
+    gap: 16px;
+}
+
+@media (min-width: 720px) {
+
+    .split {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+    }
+
+    .grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+
+/* --- Choix du rôle (électeur / candidat) ---------------------------- */
+
+.hero {
+    display: grid;
+    gap: 14px;
+
+    button {
+        min-height: 120px;
+        border-radius: var(--r);
+        font-family: var(--display);
+        font-size: 38px;
+    }
+
+    .e {
+        background: var(--blue);
+        color: #fff;
+
+        &:hover {
+            background: var(--blue-dark);
+        }
+    }
+
+    .c {
+        border-color: var(--red);
+        color: var(--red);
+
+        &:hover {
+            background: var(--red-soft);
+        }
+    }
+}
+
+@media (min-width: 640px) {
+
+    .hero {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+
+/* --- Code de classe à 6 chiffres ------------------------------------ */
+
+.code {
+    display: flex;
+    gap: 6px;
+
+    span {
+        display: grid;
+        place-items: center;
+        width: clamp(34px, 8vw, 48px);
+        height: clamp(48px, 11vw, 64px);
+        background: #fff;
+        border: 2px solid var(--ink);
+        border-radius: 8px;
+        box-shadow: 0 3px 0 var(--ink);
+        color: var(--blue);
+        font: 800 clamp(32px, 8vw, 44px)/1 var(--display);
+    }
+}
+
+
+/* ==========================================================================
+   7. RÉSULTATS ET DIRECT Enzo
+   ========================================================================== */
+
+/* Badge « élu » */
+.tag.win {
+    background: var(--green-soft);
+    color: var(--green);
+}
+
+/* Carte d'un binôme élu */
+.box.winner {
+    border: 2px solid var(--green);
+    background: var(--green-soft);
+}
+
+/* Ligne de résultat avec barre de progression */
+.bar-row {
+    display: grid;
+    gap: 4px;
+}
+
+.bar {
+    position: relative;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--blue-soft);
+    overflow: hidden;
+
+    i {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--blue);
+        transition: width .4s ease;
+    }
+}
+
+/* Trait de la majorité absolue (50 % des votes exprimés) */
+.bar-row .bar::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 50%;
+    width: 2px;
+    background: var(--ink);
+    opacity: .45;
+}
+
+
+/* ==========================================================================
+   8. OPTIONS, BULLETIN ET CODES DE VOTE
+   ========================================================================== */
+
+/* Bouton inactif (ex : « Valider mon vote » tant que la sélection est incomplète) */
+button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+
+    &:hover {
+        background: transparent;
+    }
+
+    &.go:hover {
+        background: var(--blue);
+        border-color: var(--blue);
+    }
+}
+
+.small {
+    font-size: 13.5px;
+}
+
+/* Case à cocher avec son explication (création d'une élection) */
+.opt {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    text-align: left;
+    cursor: pointer;
+
+    input[type="checkbox"] {
+        flex: none;
+        width: 22px;
+        min-height: 22px;
+        height: 22px;
+        margin: 2px 0 0;
+        accent-color: var(--blue);
+    }
+}
+
+/* Binôme sélectionné sur le bulletin */
+.box.picked {
+    border: 2px solid var(--blue);
+    background: var(--blue-soft);
+}
+
+/* Code de vote personnel : plus étroit que les champs habituels */
+.ballot .code-in {
+    max-width: 260px;
+    margin-inline: auto;
+}
+
+/* Liste des codes à distribuer */
+.codes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.vcode {
+    padding: 12px 8px;
+    background: #fff;
+    border: 2px dashed var(--ink-2);
+    border-radius: 8px;
+    text-align: center;
+    font: 700 22px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    letter-spacing: .12em;
+}
+
+@media print {
+
+    body {
+        background: #fff;
+    }
+
+    .no-print {
+        display: none;
+    }
+}
