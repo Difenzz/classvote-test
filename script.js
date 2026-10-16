@@ -5,11 +5,7 @@
 /* À remplacer par les valeurs de ton projet :
    Supabase → Project Settings → API (clé "anon" / "publishable" uniquement) */
 const SUPABASE_URL = "https://vclfmojfmwgnkfnnknks.supabase.co";
-const SUPABASE_KEY = "COLLE_ICI_LA_CLE_ANON_PUBLIQUE";   // JAMAIS la clé "service_role"
-
-if (!SUPABASE_KEY || SUPABASE_KEY.startsWith("COLLE_ICI")) {
-    console.error("script.js : renseigne SUPABASE_KEY avec la clé « anon / publishable » du projet.");
-}
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbGZtb2pmbXdnbmtmbm5rbmtzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE3MDQwNiwiZXhwIjoyMTA3NzQ2NDA2fQ.nfyoA6m6MZ8Jtnuy6F38u7wqwe27xuzc7JoQUc65z1M";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
