@@ -5,7 +5,11 @@
 /* À remplacer par les valeurs de ton projet :
    Supabase → Project Settings → API (clé "anon" / "publishable" uniquement) */
 const SUPABASE_URL = "https://vclfmojfmwgnkfnnknks.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbGZtb2pmbXdnbmtmbm5rbmtzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE3MDQwNiwiZXhwIjoyMTA3NzQ2NDA2fQ.nfyoA6m6MZ8Jtnuy6F38u7wqwe27xuzc7JoQUc65z1M";
+const SUPABASE_KEY = "COLLE_ICI_LA_CLE_ANON_PUBLIQUE";   // JAMAIS la clé "service_role"
+
+if (!SUPABASE_KEY || SUPABASE_KEY.startsWith("COLLE_ICI")) {
+    console.error("script.js : renseigne SUPABASE_KEY avec la clé « anon / publishable » du projet.");
+}
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -200,7 +204,12 @@ const api = {
     },
 
     async removePair(id) {
-        check(await sb.from("pairs").delete().eq("id", id));
+        const rows = check(await sb.from("pairs").delete().eq("id", id).select("id"));
+
+        /* Sans cette vérification, un refus RLS (phase changée) ne renvoie aucune erreur */
+        if (!rows || !rows.length) {
+            throw new Error("Retrait impossible : la phase de candidature est peut-être terminée.");
+        }
     },
 
 
@@ -600,6 +609,7 @@ function classCardHTML(c) {
 
             <div class="card-actions">
                 <button class="go" onclick="showLive('${k}')">Suivre en direct</button>
+                <button onclick="showQr('${k}')">QR code</button>
                 <button onclick="openDossier('${k}')">Dossier PDF</button>
                 <button class="danger spacer" onclick="del('${k}')">Supprimer</button>
             </div>
@@ -1112,6 +1122,7 @@ function viewLive(m) {
 
         <nav class="nav-row" aria-label="Navigation">
             <button class="link" onclick="go('dash')">← Tableau de bord</button>
+            <button class="link" onclick="showQr('${c.code}')">QR code d'accès</button>
             <button class="link" onclick="go('res')">Écran des résultats</button>
             <button class="link" onclick="openDossier('${c.code}')">Dossier PDF</button>
         </nav>
@@ -1119,7 +1130,7 @@ function viewLive(m) {
         ${history ? `<h2>Tours précédents</h2><div class="grid">${history}</div>` : ""}`;
 }
 
-function viewResults() {
+function viewResults(m) {
     const c = C();
 
     /* Les élèves ne voient rien tant que le prof n'a pas publié */
@@ -1127,6 +1138,7 @@ function viewResults() {
         return `
             <h1>Résultats</h1>
             <p>Les résultats ne sont pas encore publiés.</p>
+            ${m}
             <button onclick="go('role')">← Retour</button>`;
     }
 
@@ -1158,6 +1170,8 @@ function viewResults() {
     return `
         <h1>Résultats · ${esc(c.name)}</h1>
         <p class="muted">${c.seats} binôme(s) à élire à la majorité absolue · ${c.rounds.length} tour(s) terminé(s)</p>
+
+        ${m}
 
         ${electedHTML}
         ${ongoing}
@@ -1468,8 +1482,13 @@ async function plogin(create) {
 async function logout() {
     await api.signOut();
 
-    prof = null;
-    me   = (await api.session()).id;   // nouvelle session anonyme
+    prof      = null;
+    cur       = null;
+    cls       = null;
+    myClasses = [];
+    access    = [];
+    picked    = [];
+    me        = (await api.session()).id;   // nouvelle session anonyme
 
     go("home");
 }
@@ -1597,7 +1616,7 @@ async function apply() {
         return err("Remplis ta présentation, tes motivations et ton programme.");
     }
 
-    if (t.toLowerCase() === r.toLowerCase()) {
+    if (fold(t + " " + act.tn) === fold(r + " " + act.sn)) {
         return err("Le titulaire et le remplaçant doivent être deux élèves différents.");
     }
 
@@ -2181,6 +2200,14 @@ const PV_STATS = [
     ["majorite",    "Majorité absolue (1/2 des voix +1)"]
 ];
 
+/* Année scolaire en cours (septembre → août) */
+function schoolYear() {
+    const d = new Date();
+    const y = d.getMonth() >= 8 ? d.getFullYear() : d.getFullYear() - 1;
+
+    return y + "-" + (y + 1);
+}
+
 /* « PROCÈS-VERBAL D'ÉLECTION DES DÉLÉGUÉS DE CLASSE » */
 function drawMinutes(doc, p) {
     const M = 18, W = 210, w = W - 2 * M;
@@ -2348,7 +2375,7 @@ function defaultMinutes(c) {
     }
 
     return {
-        prof: "", date: new Date().toLocaleDateString("fr-FR"), classe: c.name, annee: "2026-2027",
+        prof: "", date: new Date().toLocaleDateString("fr-FR"), classe: c.name, annee: schoolYear(),
         rows,
         stats: Object.fromEntries(PV_STATS.map(([k]) => [k, [String(s1[k] ?? ""), String(s2[k] ?? "")]])),
         elus, president: "", assesseurs: ["", ""]
@@ -2559,6 +2586,177 @@ async function downloadMinutes() {
 
 
 /* ==========================================================================
+   7ter. QR CODE D'ACCÈS À L'ÉLECTION
+   ========================================================================== */
+
+/* Lien qui ouvre directement l'élection : https://site/?code=123456 */
+function joinUrl(code) {
+    const base = location.origin && location.origin !== "null"
+        ? location.origin + location.pathname
+        : location.href.split(/[?#]/)[0];
+
+    return base + "?code=" + code;
+}
+
+/* Bibliothèque QR (qrcode-generator, MIT), chargée à la demande */
+function loadQr() {
+    if (window.qrcode) {
+        return Promise.resolve(window.qrcode);
+    }
+
+    return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+        s.onload  = () => window.qrcode ? resolve(window.qrcode) : reject(new Error("QR code indisponible."));
+        s.onerror = () => reject(new Error("QR code indisponible : vérifie ta connexion."));
+        document.head.appendChild(s);
+    });
+}
+
+/* Renvoie le QR code (SVG) du texte donné */
+async function qrSvg(text) {
+    const make = await loadQr();
+    const qr   = make(0, "M");
+
+    qr.addData(text);
+    qr.make();
+
+    return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
+let qrOpen = null;
+
+/* Fenêtre plein cadre : le professeur la projette, les élèves scannent */
+async function showQr(code) {
+    if (qrOpen) {
+        qrOpen();
+    }
+
+    const url      = joinUrl(code);
+    const previous = document.activeElement;
+    const root     = document.createElement("div");
+
+    root.className = "dialog-backdrop";
+    root.innerHTML = `
+        <div class="dialog qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-title">
+            <h2 id="qr-title">Rejoindre l'élection</h2>
+            <p>Scanne ce QR code avec l'appareil photo, ou entre le code à la main.</p>
+            <div class="qr-box" id="qr-box" aria-label="QR code vers l'élection">Chargement…</div>
+            <div class="code" aria-label="Code ${esc(code)}">${[...code].map(d => `<span>${esc(d)}</span>`).join("")}</div>
+            <p class="small muted qr-url">${esc(url)}</p>
+            <p class="small" id="qr-status" role="status"></p>
+            <div class="row dialog-actions">
+                <button type="button" data-act="copy">Copier le lien</button>
+                <button type="button" data-act="close" class="go">Fermer</button>
+            </div>
+        </div>`;
+
+    const close = () => {
+        document.removeEventListener("keydown", onKey, true);
+        root.remove();
+        document.body.classList.remove("dialog-lock");
+        qrOpen = null;
+
+        if (previous && typeof previous.focus === "function") {
+            previous.focus();
+        }
+    };
+
+    const onKey = e => {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            close();
+        }
+    };
+
+    const status = text => {
+        const el = root.querySelector("#qr-status");
+
+        if (el) {
+            el.textContent = text;
+        }
+    };
+
+    root.querySelector('[data-act="close"]').addEventListener("click", close);
+    root.addEventListener("mousedown", e => {
+        if (e.target === root) {
+            close();
+        }
+    });
+
+    root.querySelector('[data-act="copy"]').addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(url);
+            status("Lien copié.");
+        } catch (e) {
+            status("Copie impossible : sélectionne le lien et copie-le.");
+        }
+    });
+
+    qrOpen = close;
+    document.addEventListener("keydown", onKey, true);
+    document.body.classList.add("dialog-lock");
+    document.body.appendChild(root);
+    root.querySelector('[data-act="close"]').focus();
+
+    try {
+        const svg = await qrSvg(url);
+        const box = root.querySelector("#qr-box");
+
+        if (box) {
+            box.innerHTML = svg;
+        }
+    } catch (e) {
+        const box = root.querySelector("#qr-box");
+
+        if (box) {
+            box.textContent = "";
+        }
+        status(explain(e));
+    }
+}
+
+/* Arrivée par un QR code (?code=123456) : on rejoint l'élection sans saisie */
+async function joinFromLink(k) {
+    try {
+        await ensureMe();
+
+        const c = await api.getClass(k);
+
+        if (!c) {
+            return go("home", "Code inconnu : demande un nouveau QR code à ton professeur.");
+        }
+
+        cur = k;
+        go(c.phase === "res" ? "res" : "role");
+    } catch (e) {
+        go("home", explain(e));
+    }
+}
+
+/* Lit et retire ?code=… de l'adresse ; renvoie le code s'il est valide */
+function codeFromLink() {
+    let k = null;
+
+    try {
+        const params = new URLSearchParams(location.search);
+        const raw    = (params.get("code") || "").trim();
+
+        if (params.has("code")) {
+            params.delete("code");
+
+            const rest = params.toString();
+            history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+        }
+
+        k = /^[0-9]{6}$/.test(raw) ? raw : null;
+    } catch (e) { /* adresse illisible : on ignore */ }
+
+    return k;
+}
+
+
+/* ==========================================================================
    8. THÈME, COOKIES ET PAGES LÉGALES
    ========================================================================== */
 
@@ -2737,7 +2935,7 @@ function viewLegal() {
         <p>Les contenus saisis par les utilisateurs (prénoms, programmes) restent leur propriété ;
            ils autorisent seulement leur affichage dans l'élection concernée.</p>
         <p>Éléments tiers : polices Big Shoulders Display et Public Sans (licence SIL OFL, via Google Fonts)
-           et bibliothèques Supabase JS et jsPDF (licence MIT).</p>
+           et bibliothèques Supabase JS, jsPDF et qrcode-generator (licence MIT).</p>
 
         <h2>Responsabilité</h2>
         <p>Le site est fourni sans garantie de disponibilité continue. Les éditeurs ne peuvent être tenus
@@ -2823,7 +3021,7 @@ function viewCookies() {
         </ul>
         <p>Finalités : faire fonctionner l'élection (exécution du service). Les actes de candidature et le procès-verbal sont supprimés dès que le professeur clôture l'élection ; le reste des données est supprimé avec l'élection.
            Elles sont hébergées chez Supabase, qui agit comme sous-traitant.</p>
-        <p>Les polices sont chargées depuis Google Fonts : ton adresse IP est alors transmise à Google.</p>
+        <p>Les polices sont chargées depuis Google Fonts : ton adresse IP est alors transmise à Google. Les bibliothèques PDF et QR code sont chargées depuis cdnjs (Cloudflare) quand tu les utilises.</p>
 
         <h2>Tes droits</h2>
         <p>Tu peux demander l'accès, la rectification ou l'effacement de tes données, ou t'opposer à leur traitement, en écrivant à l'adresse de contact.
@@ -2898,6 +3096,8 @@ if (!readCookie(CONSENT_KEY)) {
    ========================================================================== */
 
 (async () => {
+    const linkCode = codeFromLink();
+
     try {
         const user = await api.session();
         me = user.id;
@@ -2913,6 +3113,10 @@ if (!readCookie(CONSENT_KEY)) {
 
             return go("dash");
         }
+
+        if (linkCode && !pageFromHash()) {
+            return joinFromLink(linkCode);
+        }
     } catch (e) {
         /* Aucun message ici : l'élève n'a encore rien fait.
            La session sera retentée (ensureMe) à sa première action. */
@@ -2921,6 +3125,8 @@ if (!readCookie(CONSENT_KEY)) {
 
     if (pageFromHash()) {
         syncHash();
+    } else if (linkCode) {
+        joinFromLink(linkCode);
     } else {
         render();
     }

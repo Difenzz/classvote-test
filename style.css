@@ -1408,3 +1408,31 @@ body.dialog-lock {
         animation: none;
     }
 }
+
+
+/* --- QR code d'accès --------------------------------------------------- */
+.qr-dialog {
+    text-align: center;
+}
+
+.qr-box {
+    width: min(76vw, 340px);
+    min-height: 120px;
+    margin: 12px auto;
+    padding: 12px;
+    display: grid;
+    place-items: center;
+    background: #fff;          /* fond blanc obligatoire, même en mode sombre */
+    color: #0F1B3D;
+    border-radius: 12px;
+}
+
+.qr-box svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.qr-url {
+    overflow-wrap: anywhere;
+}
