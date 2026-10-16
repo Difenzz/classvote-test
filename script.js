@@ -6,7 +6,6 @@
    Supabase → Project Settings → API (clé "anon" / "publishable" uniquement) */
 const SUPABASE_URL = "https://vclfmojfmwgnkfnnknks.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbGZtb2pmbXdnbmtmbm5rbmtzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE3MDQwNiwiZXhwIjoyMTA3NzQ2NDA2fQ.nfyoA6m6MZ8Jtnuy6F38u7wqwe27xuzc7JoQUc65z1M";
-
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* Renvoie les données d'une réponse Supabase, ou lève l'erreur */
@@ -1968,12 +1967,12 @@ function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
             } else {
                 doc.rect(cx, y, widths[i], h);
             }
-            if (!bold && String(cells[i]).trim() === "/") {
-                /* Le « / » (case vide) est centré dans sa case */
-                doc.text("/", cx + widths[i] / 2, y + h / 2 + 1.2, { align: "center" });
-            } else {
-                doc.text(lines[i], cx + 2, y + 5.4);
-            }
+            /* Texte centré dans la case, horizontalement et verticalement (« / » compris) */
+            const top = y + (h - lines[i].length * 4.4) / 2;
+
+            lines[i].forEach((line, k) => {
+                doc.text(line, cx + widths[i] / 2, top + 3.4 + k * 4.4, { align: "center" });
+            });
             cx += widths[i];
         });
 
