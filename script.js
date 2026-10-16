@@ -325,6 +325,7 @@ async function ensureMe() {
 async function refresh() {
     if (view === "dash") {
         myClasses = await api.myClasses(prof);
+        watchAccessFromDash(myClasses);
         return;
     }
 
@@ -345,6 +346,7 @@ async function refresh() {
 
         if (view === "live" && prof && cls.needApproval) {
             access = await api.accessRows(cur);
+            notifyAccess(cur, access);
         }
 
         if (view === "dossier") {
@@ -1175,7 +1177,6 @@ function viewResults(m) {
         ${history ? `<h2>Détail des tours</h2><div class="grid">${history}</div>` : ""}
 
         <div class="row">
-            ${!prof && elected.length ? `<button class="go" onclick="replayPodium()">🏆 Revoir le podium</button>` : ""}
             <button onclick="go('${backTo}')">← Retour</button>
         </div>`;
 }
@@ -1208,6 +1209,8 @@ function closePodium() {
     }
 
     const { root, onKey, previous } = podium;
+
+    stopPodiumSound();
 
     document.removeEventListener("keydown", onKey, true);
 
@@ -1269,10 +1272,6 @@ function showPodium(c) {
     root.setAttribute("aria-label", "Podium des résultats");
 
     root.innerHTML = `
-        <div class="pd-bar">
-            <button type="button" class="pd-btn" data-act="close">Fermer ✕</button>
-        </div>
-
         <p class="pd-sr">${esc(summary || "Aucun binôme n'a été élu.")}</p>
 
         ${n ? `<div class="pd-intro" aria-hidden="true">Et les élus sont…</div>` : ""}
@@ -1308,6 +1307,8 @@ function showPodium(c) {
     document.body.appendChild(root);
 
     root.querySelector('.pd-foot [data-act="close"]').focus();
+
+    playPodiumSound(n, delayOf, finalAt);
 }
 
 /* Appelé à chaque rendu : ouvre le podium aux élèves quand les résultats sont publiés,
@@ -1321,12 +1322,6 @@ function maybePodium() {
     }
 
     if (here && !podium && !podiumSeen(cls)) {
-        showPodium(cls);
-    }
-}
-
-function replayPodium() {
-    if (cls) {
         showPodium(cls);
     }
 }
@@ -1816,6 +1811,7 @@ async function poll() {
 
         if (view === "live" && prof && fresh.needApproval) {
             access = await api.accessRows(cur);
+            notifyAccess(cur, access);
         }
 
         const sig = view + "|" + signature(fresh, voted);
@@ -1862,6 +1858,7 @@ async function pollDash() {
         }
 
         myClasses = fresh;
+        watchAccessFromDash(fresh);
 
         const sig = dashSig(fresh);
 
@@ -1931,7 +1928,8 @@ function syncRealtime() {
         key   = "dash:" + codes;
         specs = [
             { table: "classes", filter: "owner=eq." + prof },
-            { table: "pairs",   filter: "class_code=in.(" + codes + ")" }
+            { table: "pairs",   filter: "class_code=in.(" + codes + ")" },
+            { table: "voter_access", filter: "class_code=in.(" + codes + ")" }
         ];
     }
 
@@ -2733,6 +2731,312 @@ function codeFromLink() {
     } catch (e) { /* adresse illisible : on ignore */ }
 
     return k;
+}
+
+
+/* ==========================================================================
+   7quater. SONS ET NOTIFICATIONS
+   ========================================================================== */
+
+/* Les sons sont fabriqués par le navigateur (Web Audio) : aucun fichier à charger */
+let audio = null;
+
+function audioCtx() {
+    try {
+        if (!audio) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+
+            if (!AC) {
+                return null;
+            }
+            audio = new AC();
+        }
+        return audio;
+    } catch (e) {
+        return null;
+    }
+}
+
+/* Exécute fn(ac) quand le son est autorisé ; ne fait rien (sans erreur) s'il est bloqué */
+function whenAudioReady(fn) {
+    const ac = audioCtx();
+
+    if (!ac) {
+        return;
+    }
+
+    if (ac.state === "running") {
+        fn(ac);
+    } else {
+        ac.resume()
+            .then(() => {
+                if (ac.state === "running") {
+                    fn(ac);
+                }
+            })
+            .catch(() => {});
+    }
+}
+
+/* Une note */
+function tone(ac, out, { t, f, d = .2, type = "sine", v = .2, to }) {
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+
+    if (to) {
+        o.frequency.exponentialRampToValueAtTime(to, t + d);
+    }
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + .015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+
+    o.connect(g);
+    g.connect(out);
+    o.start(t);
+    o.stop(t + d + .05);
+}
+
+/* Un coup de caisse claire / un souffle */
+function noise(ac, out, { t, d = .1, v = .15, freq = 1500 }) {
+    const len  = Math.max(1, Math.floor(ac.sampleRate * d));
+    const buf  = ac.createBuffer(1, len, ac.sampleRate);
+    const data = buf.getChannelData(0);
+
+    for (let i = 0; i < len; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const src  = ac.createBufferSource();
+    const filt = ac.createBiquadFilter();
+    const g    = ac.createGain();
+
+    src.buffer = buf;
+    filt.type = "bandpass";
+    filt.frequency.value = freq;
+
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(out);
+    src.start(t);
+    src.stop(t + d);
+}
+
+/* --- Podium : roulement de tambour, marches qui montent, fanfare ------- */
+
+let podiumAudio = null;   // volume général du podium (coupé à la fermeture)
+
+function stopPodiumSound() {
+    if (!podiumAudio) {
+        return;
+    }
+
+    try {
+        podiumAudio.gain.value = 0;
+        podiumAudio.disconnect();
+    } catch (e) { /* déjà coupé */ }
+
+    podiumAudio = null;
+}
+
+/* Calé sur l'animation : delayOf(rang) = montée de la marche, finalAt = arrivée du n°1 */
+function playPodiumSound(n, delayOf, finalAt) {
+    if (!n) {
+        return;
+    }
+
+    whenAudioReady(ac => {
+        if (!podium) {
+            return;     // fermé entre-temps
+        }
+
+        stopPodiumSound();
+
+        const master = ac.createGain();
+
+        master.gain.value = .8;
+        master.connect(ac.destination);
+        podiumAudio = master;
+
+        const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const t0   = ac.currentTime + .05;
+
+        if (!calm) {
+            /* Roulement de tambour pendant « Et les élus sont… », de plus en plus serré */
+            for (let t = .2, gap = .16; t < 2.05; t += gap, gap = Math.max(.04, gap * .92)) {
+                noise(ac, master, { t: t0 + t, d: .07, v: .05 + t * .05, freq: 1800 });
+            }
+
+            /* Chaque marche : souffle qui monte, puis choc grave */
+            for (let r = n; r >= 1; r--) {
+                const at = t0 + delayOf(r);
+
+                tone(ac, master, { t: at, f: 180, to: 560, d: .55, type: "sawtooth", v: .06 });
+                tone(ac, master, { t: at + .55, f: 150, to: 50, d: .35, v: .5 });
+                noise(ac, master, { t: at + .55, d: .2, v: .2, freq: 600 });
+            }
+        }
+
+        /* Fanfare à l'arrivée du binôme n°1, avec les confettis */
+        const fin = t0 + (calm ? 0 : finalAt);
+
+        noise(ac, master, { t: fin, d: .5, v: .18, freq: 4000 });
+
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+            tone(ac, master, { t: fin + i * .11, f, d: .3, type: "triangle", v: .18 });
+        });
+
+        [523.25, 659.25, 783.99, 1046.5].forEach(f => {
+            tone(ac, master, { t: fin + .55, f, d: 1.3, type: "triangle", v: .12 });
+        });
+    });
+}
+
+/* --- Notification côté professeur --------------------------------------- */
+
+/* « Ding » à deux notes */
+function ding() {
+    whenAudioReady(ac => {
+        const t = ac.currentTime + .02;
+
+        tone(ac, ac.destination, { t,       f: 880,    d: .25, v: .15 });
+        tone(ac, ac.destination, { t: t + .14, f: 1318.5, d: .5,  v: .15 });
+    });
+}
+
+/* Petite bulle en haut de l'écran (3 au maximum, disparaît seule) */
+function toast(text, actions) {
+    let root = document.getElementById("toast-root");
+
+    if (!root) {
+        root = document.createElement("div");
+        root.id = "toast-root";
+        root.setAttribute("role", "status");
+        root.setAttribute("aria-live", "polite");
+        document.body.appendChild(root);
+    }
+
+    while (root.children && root.children.length >= 3) {
+        root.removeChild(root.firstChild);
+    }
+
+    const el = document.createElement("div");
+
+    el.className = "toast";
+    el.innerHTML = `<span>${esc(text)}</span>`;
+
+    [].concat(actions || []).forEach(action => {
+        const b = document.createElement("button");
+
+        b.type = "button";
+        b.className = action.cls || "go";
+        b.textContent = action.label;
+        b.addEventListener("click", () => {
+            el.remove();
+            action.run();
+        });
+        el.appendChild(b);
+    });
+
+    const x = document.createElement("button");
+
+    x.type = "button";
+    x.className = "link";
+    x.textContent = "✕";
+    x.setAttribute("aria-label", "Fermer la notification");
+    x.addEventListener("click", () => el.remove());
+    el.appendChild(x);
+
+    root.appendChild(el);
+    setTimeout(() => el.remove(), 10000);
+}
+
+/* Demandes d'accès déjà vues (celles encore en attente à la dernière vérification) */
+let seenAccess = { code: "", ids: new Set(), ready: false };
+
+/* Prévient le professeur quand une NOUVELLE demande d'élève arrive.
+   La première lecture d'une classe sert de point de départ : pas de notification. */
+function notifyAccess(code, rows, className) {
+    if (seenAccess.code !== code) {
+        seenAccess = { code, ids: new Set(), ready: false };
+    }
+
+    const pending = rows.filter(a => a.status === "pending");
+    const fresh   = pending.filter(a => !seenAccess.ids.has(a.voter_id));
+
+    /* On ne garde que les demandes encore en attente : un élève refusé qui redemande est « nouveau » */
+    const wasReady = seenAccess.ready;
+
+    seenAccess.ids   = new Set(pending.map(a => a.voter_id));
+    seenAccess.ready = true;
+
+    if (!wasReady || !fresh.length) {
+        return;
+    }
+
+    const where = className ? " (" + className + ")" : "";
+
+    if (fresh.length === 1) {
+        const a    = fresh[0];
+        const name = a.pseudo || "Un élève";
+
+        /* Même prénom déjà validé (appareil du professeur) ou déjà en attente : on prévient */
+        const same = x => fold(x.pseudo) === fold(a.pseudo);
+        const dup  = !!a.pseudo && (loadApproved(code).some(same) || pending.filter(same).length > 1);
+
+        toast(name + " demande à voter" + where + (dup ? " ⚠ doublon possible" : ""), [
+            { label: "Valider", run: () => decideFromToast(code, a.voter_id, true,  name) },
+            { label: "Refuser", cls: "danger", run: () => decideFromToast(code, a.voter_id, false, name) }
+        ]);
+    } else {
+        toast(
+            fresh.length + " nouvelles demandes de vote" + where,
+            view === "live" ? null : { label: "Voir", run: () => showLive(code) }
+        );
+    }
+
+    ding();
+}
+
+/* Valide ou refuse un élève directement depuis la notification */
+async function decideFromToast(code, id, ok, name) {
+    try {
+        await api.decideAccess(code, id, ok);
+
+        /* Mémoire locale (appareil du professeur) pour repérer les doublons, comme decide() */
+        if (ok) {
+            const list = loadApproved(code);
+
+            list.push({ id, pseudo: name });
+            saveApproved(code, list);
+        }
+
+        toast(name + (ok ? " est validé(e)." : " est refusé(e)."));
+        refreshLive();
+    } catch (e) {
+        toast(explain(e));
+    }
+}
+
+/* Depuis le tableau de bord : surveille la demande d'accès de l'élection en cours */
+async function watchAccessFromDash(list) {
+    const active = list.find(c => c.needApproval && c.phase !== "res");
+
+    if (!active) {
+        return;
+    }
+
+    try {
+        notifyAccess(active.code, await api.accessRows(active.code), active.name);
+    } catch (e) {
+        console.warn("Notifications indisponibles :", e);
+    }
 }
 
 
