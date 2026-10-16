@@ -2500,11 +2500,12 @@ function viewDossier(m) {
 
         <div class="box">
             <h2>Clôturer l'élection</h2>
-            <p class="muted">Supprime définitivement les actes de candidature et le procès-verbal enregistrés.
-               Télécharge-les d'abord : après la clôture, ils ne sont plus récupérables.</p>
+            <p class="muted">Supprime définitivement l'élection (la classe, ses binômes et ses résultats),
+               les actes de candidature et le procès-verbal enregistrés.
+               Télécharge-les d'abord : après la clôture, plus rien n'est récupérable.</p>
             ${c.phase === "res" ? "" : `<p class="notice">Publie d'abord les résultats pour pouvoir clôturer.</p>`}
             <div class="row">
-                <button class="danger" onclick="closeElection()" ${c.phase === "res" ? "" : "disabled"}>Clôturer et supprimer les données</button>
+                <button class="danger" onclick="closeElection()" ${c.phase === "res" ? "" : "disabled"}>Clôturer et supprimer l'élection</button>
             </div>
         </div>
 
@@ -2542,19 +2543,33 @@ async function closeElection() {
     }
 
     const yes = await askConfirm(
-        "Les actes de candidature et le procès-verbal seront supprimés définitivement. Les as-tu téléchargés ?",
-        { title: "Clôturer l'élection ?", ok: "Clôturer et supprimer", danger: true }
+        "L'élection sera supprimée définitivement, avec ses résultats, les actes de candidature et le procès-verbal. Les as-tu téléchargés ?",
+        { title: "Clôturer et supprimer l'élection ?", ok: "Clôturer et supprimer", danger: true }
     );
 
     if (!yes) {
         return;
     }
 
+    const code = cur;
+
     try {
-        await api.purgeDossier(cur);
+        /* 1. Actes de candidature et procès-verbal */
+        await api.purgeDossier(code);
         minutes = null;
-        await go("dossier");
-        note("Élection clôturée : les données ont été supprimées.", true);
+        acts    = [];
+
+        /* 2. La classe elle-même (binômes, accès et bulletins partent en cascade) */
+        await api.deleteClass(code);
+
+        /* 3. Mémoire locale du professeur pour cette classe */
+        try {
+            localStorage.removeItem("approved:" + code);
+        } catch (e) { /* stockage indisponible : rien à nettoyer */ }
+
+        cur = null;
+        cls = null;
+        go("dash", "Élection clôturée : l'élection et toutes ses données ont été supprimées.");
     } catch (e) {
         note(explain(e));
     }
