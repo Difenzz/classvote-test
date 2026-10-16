@@ -1164,7 +1164,192 @@ function viewResults() {
 
         ${history ? `<h2>Détail des tours</h2><div class="grid">${history}</div>` : ""}
 
-        <button onclick="go('${backTo}')">← Retour</button>`;
+        <div class="row">
+            ${!prof && elected.length ? `<button class="go" onclick="replayPodium()">🏆 Revoir le podium</button>` : ""}
+            <button onclick="go('${backTo}')">← Retour</button>
+        </div>`;
+}
+
+
+/* --- 5.4 Podium plein écran (côté élève) ----------------------------- */
+
+let podium     = null;   // écran ouvert : { root, onKey, onFs, previous }
+let podiumLast = "";     // dernier podium montré (évite de le rejouer à chaque rafraîchissement)
+
+/* Identifie des résultats précis : un nouveau résultat rejoue le podium */
+const podiumId = c => c.code + "|" + c.rounds.length + "|" + electedPairs(c).map(x => x.id).join(",");
+
+function podiumSeen(c) {
+    const id = podiumId(c);
+
+    if (podiumLast === id) {
+        return true;
+    }
+    try {
+        return sessionStorage.getItem("cv_podium") === id;
+    } catch (e) {
+        return false;
+    }
+}
+
+function closePodium() {
+    if (!podium) {
+        return;
+    }
+
+    const { root, onKey, onFs, previous } = podium;
+
+    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("fullscreenchange", onFs);
+
+    if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+    }
+
+    root.remove();
+    document.body.classList.remove("dialog-lock");
+    podium = null;
+
+    if (previous && typeof previous.focus === "function") {
+        previous.focus();
+    }
+}
+
+function togglePodiumFullscreen() {
+    if (!podium) {
+        return;
+    }
+
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+    } else if (podium.root.requestFullscreen) {
+        podium.root.requestFullscreen().catch(() => {});
+    }
+}
+
+/* Écran plein cadre avec animation : les marches montent une à une, le n°1 en dernier */
+function showPodium(c) {
+    closePodium();
+
+    const id = podiumId(c);
+
+    podiumLast = id;
+    try {
+        sessionStorage.setItem("cv_podium", id);
+    } catch (e) { /* stockage indisponible : on garde seulement la mémoire de l'onglet */ }
+
+    const list     = electedPairs(c).slice(0, 3);
+    const n        = list.length;
+    const delayOf  = r => 2.1 + (n - r) * 1.3;          // rang 1 = dernier révélé
+    const finalAt  = n ? delayOf(1) + .7 : 0;
+    const order    = n === 0 ? [] : n === 1 ? [1] : n === 2 ? [2, 1] : [2, 1, 3];   // 2e à gauche, 1er au centre
+    const colors   = ["#F7C948", "#1E3FCC", "#D42F3E", "#2FB67A"];
+
+    const cols = order.map(r => {
+        const x = list[r - 1];
+
+        return `
+            <div class="pd-col pd-r${r}" style="--d:${delayOf(r).toFixed(2)}s">
+                <div class="pd-who">
+                    ${r === 1 ? `<span class="pd-crown" aria-hidden="true">👑</span>` : ""}
+                    <b>${esc(x.t)} &amp; ${esc(x.r)}</b>
+                    <span>Titulaire : ${esc(x.t)} · Remplaçant : ${esc(x.r)}</span>
+                </div>
+                <div class="pd-step" aria-hidden="true"><small>Binôme</small><span>${r}</span></div>
+            </div>`;
+    }).join("");
+
+    const confetti = n
+        ? Array.from({ length: 70 }, (_, i) => `<i style="--x:${(Math.random() * 100).toFixed(1)}%;` +
+              `--cd:${(finalAt + Math.random() * 1.6).toFixed(2)}s;--t:${(3.2 + Math.random() * 3).toFixed(2)}s;` +
+              `--c:${colors[i % colors.length]};--rot:${Math.round(Math.random() * 360)}deg;` +
+              `--dx:${Math.round(Math.random() * 160 - 80)}px"></i>`).join("")
+        : "";
+
+    const summary = list.map(x => `Binôme n°${x.seat} : ${x.t} et ${x.r}`).join(". ");
+
+    const root = document.createElement("div");
+
+    root.className = "podium-screen";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.setAttribute("aria-label", "Podium des résultats");
+
+    root.innerHTML = `
+        <div class="pd-bar">
+            ${document.fullscreenEnabled ? `<button type="button" class="pd-btn" data-act="fs">⛶ Plein écran</button>` : ""}
+            <button type="button" class="pd-btn" data-act="close">Fermer ✕</button>
+        </div>
+
+        <p class="pd-sr">${esc(summary || "Aucun binôme n'a été élu.")}</p>
+
+        ${n ? `<div class="pd-intro" aria-hidden="true">Et les élus sont…</div>` : ""}
+
+        <div class="pd-main">
+            <h1 class="pd-title" ${n ? "" : `style="animation-delay:0s"`}>Résultats · ${esc(c.name)}</h1>
+
+            ${n
+                ? `<div class="pd-stage">${cols}</div>
+                   <p class="pd-final" style="--d:${(finalAt + 1.1).toFixed(2)}s">Félicitations aux délégués élus !</p>`
+                : `<p class="pd-none">Aucun binôme n'a été élu à la majorité absolue.</p>`}
+        </div>
+
+        <div class="pd-foot">
+            <button type="button" class="pd-btn go" data-act="close">Voir le détail des résultats</button>
+        </div>
+
+        <div class="pd-confetti" aria-hidden="true">${confetti}</div>`;
+
+    const fsBtn = root.querySelector('[data-act="fs"]');
+
+    const onKey = e => {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            closePodium();
+        }
+    };
+
+    const onFs = () => {
+        if (fsBtn) {
+            fsBtn.textContent = document.fullscreenElement ? "⛶ Quitter le plein écran" : "⛶ Plein écran";
+        }
+    };
+
+    root.querySelectorAll('[data-act="close"]').forEach(b => b.addEventListener("click", closePodium));
+
+    if (fsBtn) {
+        fsBtn.addEventListener("click", togglePodiumFullscreen);
+    }
+
+    podium = { root, onKey, onFs, previous: document.activeElement };
+
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("fullscreenchange", onFs);
+    document.body.classList.add("dialog-lock");
+    document.body.appendChild(root);
+
+    root.querySelector('.pd-foot [data-act="close"]').focus();
+}
+
+/* Appelé à chaque rendu : ouvre le podium aux élèves quand les résultats sont publiés,
+   et le ferme si le professeur les retire */
+function maybePodium() {
+    const here = !prof && view === "res" && cls && cls.phase === "res";
+
+    if (podium && !here) {
+        closePodium();
+        return;
+    }
+
+    if (here && !podium && !podiumSeen(cls)) {
+        showPodium(cls);
+    }
+}
+
+function replayPodium() {
+    if (cls) {
+        showPodium(cls);
+    }
 }
 
 
@@ -1199,6 +1384,7 @@ function render() {
 
     syncRealtime();
     setTitle();
+    maybePodium();
 }
 
 
