@@ -4,8 +4,8 @@
 
 /* À remplacer par les valeurs de ton projet :
    Supabase → Project Settings → API (clé "anon" / "publishable" uniquement) */
-const SUPABASE_URL = "https://tejwsflrwnjpvrelosco.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlandzZmxyd25qcHZyZWxvc2NvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjA4MzQ0MSwiZXhwIjoyMTA3NjU5NDQxfQ.8bCoEhszTZa9yjgR4DG6116Y82a8MdmRxJNevECfDEY";
+const SUPABASE_URL = "https://fzobmlpdqwslsyksbnkm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6b2JtbHBkcXdzbHN5a3NibmttIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjA5MDMwMiwiZXhwIjoyMTA3NjY2MzAyfQ.A4IuT460HM_fs7sa5-GI7ShuovmTBVU5_SPmhj6isZY";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -185,9 +185,12 @@ const api = {
         check(await sb.rpc("decide_access", { p_class: code, p_voter: voterId, p_approve: approve }));
     },
 
-    async deleteClass(code) {
-        check(await sb.from("classes").delete().eq("code", code));
-    },
+      async deleteClass(code) {
+          const rows = check(await sb.from("classes").delete().eq("code", code).select("code"));
+          if (!rows.length) {
+              throw new Error("Suppression refusée : connecte-toi avec ton compte professeur.");
+          }
+      },
 
 
     /* --- Binômes -------------------------------------------------------- */
@@ -372,6 +375,82 @@ async function go(v, m) {
     }
 
     render();
+}
+
+/* Boîte de confirmation du site (remplace le confirm() du navigateur).
+   Renvoie une promesse : true si l'utilisateur confirme, false sinon.
+   options : { title, ok, cancel, danger } */
+let dialogOpen = null;
+
+function askConfirm(text, options = {}) {
+    const { title = "Confirmation", ok = "Confirmer", cancel = "Annuler", danger = false } = options;
+
+    /* Une seule boîte à la fois : l'ancienne est annulée */
+    if (dialogOpen) {
+        dialogOpen(false);
+    }
+
+    return new Promise(resolve => {
+        const previous = document.activeElement;
+        const root = document.createElement("div");
+
+        root.className = "dialog-backdrop";
+        root.innerHTML = `
+            <div class="dialog" role="alertdialog" aria-modal="true"
+                 aria-labelledby="dialog-title" aria-describedby="dialog-text">
+                <h2 id="dialog-title">${esc(title)}</h2>
+                <p id="dialog-text">${esc(text)}</p>
+                <div class="row dialog-actions">
+                    <button type="button" data-act="cancel">${esc(cancel)}</button>
+                    <button type="button" data-act="ok" class="${danger ? "danger" : "go"}">${esc(ok)}</button>
+                </div>
+            </div>`;
+
+        const okBtn     = root.querySelector('[data-act="ok"]');
+        const cancelBtn = root.querySelector('[data-act="cancel"]');
+
+        const close = value => {
+            document.removeEventListener("keydown", onKey, true);
+            root.remove();
+            document.body.classList.remove("dialog-lock");
+            dialogOpen = null;
+
+            if (previous && typeof previous.focus === "function") {
+                previous.focus();
+            }
+            resolve(value);
+        };
+
+        const onKey = e => {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                close(false);
+            } else if (e.key === "Tab") {
+                /* Le focus reste dans la boîte */
+                const items = [cancelBtn, okBtn];
+                const i = items.indexOf(document.activeElement);
+
+                e.preventDefault();
+                items[(i + (e.shiftKey ? items.length - 1 : 1)) % items.length].focus();
+            }
+        };
+
+        okBtn.addEventListener("click", () => close(true));
+        cancelBtn.addEventListener("click", () => close(false));
+        root.addEventListener("mousedown", e => {
+            if (e.target === root) {
+                close(false);
+            }
+        });
+
+        dialogOpen = close;
+        document.addEventListener("keydown", onKey, true);
+        document.body.classList.add("dialog-lock");
+        document.body.appendChild(root);
+
+        /* Action destructive : le focus démarre sur « Annuler » */
+        (danger ? cancelBtn : okBtn).focus();
+    });
 }
 
 /* Affiche une erreur sans refaire tout le rendu */
@@ -1277,7 +1356,12 @@ async function closeRound() {
         return;
     }
 
-    if (!confirm("Clôturer le tour " + c.round + " ? Les votes seront comptés et le tour suivant commencera si besoin.")) {
+    const yes = await askConfirm(
+        "Les votes seront comptés et le tour suivant commencera si besoin.",
+        { title: "Clôturer le tour " + c.round + " ?", ok: "Clôturer le tour" }
+    );
+
+    if (!yes) {
         return;
     }
 
@@ -1290,7 +1374,12 @@ async function closeRound() {
 }
 
 async function del(k) {
-    if (!confirm("Supprimer cette élection ? Cette action est définitive.")) {
+    const yes = await askConfirm(
+        "Cette action est définitive.",
+        { title: "Supprimer cette élection ?", ok: "Supprimer", danger: true }
+    );
+
+    if (!yes) {
         return;
     }
 
@@ -1434,6 +1523,8 @@ async function ballot(kind) {
     }
 
     let question;
+    let title;
+    let okLabel;
     let ids = [];
 
     if (kind === "pair") {
@@ -1451,14 +1542,20 @@ async function ballot(kind) {
             .map(x => x.t + " & " + x.r)
             .join(" et ");
 
-        question = "Confirmer ton vote pour " + names + " ? Il sera définitif.";
+        title    = "Confirmer ton vote";
+        okLabel  = "Voter";
+        question = "Tu votes pour " + names + ". Ton vote sera définitif.";
     } else if (kind === "blank") {
-        question = "Voter blanc ? Ton bulletin comptera comme une participation mais ne sera attribué à aucun binôme. C'est définitif.";
+        title    = "Voter blanc ?";
+        okLabel  = "Voter blanc";
+        question = "Ton bulletin comptera comme une participation mais ne sera attribué à aucun binôme. C'est définitif.";
     } else {
-        question = "T'abstenir ? Tu ne prendras pas part à ce tour. C'est définitif.";
+        title    = "T'abstenir ?";
+        okLabel  = "M'abstenir";
+        question = "Tu ne prendras pas part à ce tour. C'est définitif.";
     }
 
-    if (!confirm(question)) {
+    if (!(await askConfirm(question, { title, ok: okLabel }))) {
         return;
     }
 
@@ -1716,8 +1813,7 @@ Object.assign(api, {
 
     /* Clôture : supprime définitivement actes et procès-verbal de la classe */
     async purgeDossier(code) {
-        check(await sb.from("candidacy_forms").delete().eq("class_code", code));
-        check(await sb.from("minutes").delete().eq("class_code", code));
+        check(await sb.rpc("purge_dossier", { p_class: code }));
 
         /* Un refus RLS ne renvoie aucune erreur : on vérifie qu'il ne reste rien */
         const left = await api.acts(code);
@@ -1872,7 +1968,12 @@ function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
             } else {
                 doc.rect(cx, y, widths[i], h);
             }
-            doc.text(lines[i], cx + 2, y + 5.4);
+            if (!bold && String(cells[i]).trim() === "/") {
+                /* Le « / » (case vide) est centré dans sa case */
+                doc.text("/", cx + widths[i] / 2, y + h / 2 + 1.2, { align: "center" });
+            } else {
+                doc.text(lines[i], cx + 2, y + 5.4);
+            }
             cx += widths[i];
         });
 
@@ -1920,7 +2021,12 @@ function drawMinutes(doc, p) {
 
     y = pdfTable(doc, M, y, [94, 40, 40],
         ["TITULAIRE + SON SUPPLÉANT", "Suffrages 1er tour", "Suffrages 2ème tour"],
-        p.rows.map(r => [r.name, r.t1, r.t2])) + 8;
+        [
+            ...p.rows.map(r => [r.name, r.t1, r.t2]),
+            /* Les votes blancs et les abstentions sont comptés dans le PDF */
+            ["Votes blancs ou nuls", p.stats.blancs[0],      p.stats.blancs[1]],
+            ["Abstentions",          p.stats.abstentions[0], p.stats.abstentions[1]]
+        ]) + 8;
 
     y = pdfTable(doc, M, y, [94, 40, 40],
         ["", "1er tour", "2ème tour"],
@@ -2001,8 +2107,23 @@ function downloadAllActs() {
 
 /* Pré-remplissage à partir du vote (modifiable par le professeur) */
 function defaultMinutes(c) {
-    const r1 = c.rounds[0];
-    const r2 = c.rounds[1];
+    /* Tour archivé, ou tour en cours (pas encore clôturé) avec ses compteurs live */
+    const roundAt = i => {
+        if (c.rounds[i]) {
+            return c.rounds[i];
+        }
+
+        if (i === c.rounds.length && c.phase === "vote" && c.cast > 0) {
+            return {
+                n: c.n, cast: c.cast, blank: c.blank, abstain: c.abst, valid: c.valid,
+                results: c.pairs.filter(x => x.seat == null).map(x => ({ id: x.id, votes: x.votes }))
+            };
+        }
+        return undefined;
+    };
+
+    const r1 = roundAt(0);
+    const r2 = roundAt(1);
 
     const votes = (h, id) => {
         const x = h && (h.results || []).find(z => z.id === id);
@@ -2063,7 +2184,16 @@ function readMinutes() {
 
 function viewDossier(m) {
     const c  = C();
-    const pm = minutes || defaultMinutes(c);
+    const def = defaultMinutes(c);
+    const pm  = minutes ? { ...def, ...minutes } : def;
+
+    /* Cases de statistiques restées vides dans le PV enregistré : reprises du vote */
+    pm.stats = Object.fromEntries(PV_STATS.map(([k]) => {
+        const saved = (minutes && minutes.stats && minutes.stats[k]) || [];
+        const auto  = def.stats[k] || ["", ""];
+
+        return [k, [saved[0] || auto[0] || "", saved[1] || auto[1] || ""]];
+    }));
 
     pvRows = pm.rows.length;
 
@@ -2202,7 +2332,12 @@ async function closeElection() {
         return note("Publie d'abord les résultats.");
     }
 
-    if (!confirm("Clôturer l'élection ? Les actes de candidature et le procès-verbal seront supprimés définitivement. Les as-tu téléchargés ?")) {
+    const yes = await askConfirm(
+        "Les actes de candidature et le procès-verbal seront supprimés définitivement. Les as-tu téléchargés ?",
+        { title: "Clôturer l'élection ?", ok: "Clôturer et supprimer", danger: true }
+    );
+
+    if (!yes) {
         return;
     }
 

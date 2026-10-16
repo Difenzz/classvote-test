@@ -13,6 +13,7 @@ DROP FUNCTION IF EXISTS public.close_round(text);
 DROP FUNCTION IF EXISTS public.decide_access(text, uuid, boolean);
 DROP FUNCTION IF EXISTS public.has_voted(text);
 DROP FUNCTION IF EXISTS public.is_teacher();
+DROP FUNCTION IF EXISTS public.purge_dossier(text);
 DROP FUNCTION IF EXISTS public.request_access(text, text);
 
 -- ============================================================
@@ -665,6 +666,31 @@ CREATE OR REPLACE FUNCTION public.is_teacher() RETURNS boolean
 
 $$;
 
+CREATE OR REPLACE FUNCTION public.purge_dossier(p_class text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+    c classes%rowtype;
+begin
+    select * into c from classes where code = p_class for update;
+
+    if not found then
+        raise exception 'Classe introuvable.';
+    end if;
+    if c.owner is distinct from auth.uid() or not public.is_teacher() then
+        raise exception 'Action non autorisée.' using errcode = '42501';
+    end if;
+    if c.phase <> 'res' then
+        raise exception 'Publie d''abord les résultats pour pouvoir clôturer.';
+    end if;
+
+    -- Actes de candidature et procès-verbal : suppression définitive
+    delete from candidacy_forms where class_code = c.code;
+    delete from minutes         where class_code = c.code;
+end;
+$$;
+
 CREATE OR REPLACE FUNCTION public.request_access(p_class text, p_pseudo text) RETURNS text
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -878,6 +904,11 @@ GRANT ALL ON FUNCTION public.has_voted(p_class text) TO service_role;
 GRANT ALL ON FUNCTION public.is_teacher() TO anon;
 GRANT ALL ON FUNCTION public.is_teacher() TO authenticated;
 GRANT ALL ON FUNCTION public.is_teacher() TO service_role;
+
+REVOKE ALL ON FUNCTION public.purge_dossier(p_class text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.purge_dossier(p_class text) TO anon;
+GRANT ALL ON FUNCTION public.purge_dossier(p_class text) TO authenticated;
+GRANT ALL ON FUNCTION public.purge_dossier(p_class text) TO service_role;
 
 REVOKE ALL ON FUNCTION public.request_access(p_class text, p_pseudo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.request_access(p_class text, p_pseudo text) TO anon;
