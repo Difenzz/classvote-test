@@ -1183,7 +1183,7 @@ function viewResults(m) {
 
 /* --- 5.4 Podium plein écran (côté élève) ----------------------------- */
 
-let podium     = null;   // écran ouvert : { root, onKey, onFs, previous }
+let podium     = null;   // écran ouvert : { root, onKey, previous }
 let podiumLast = "";     // dernier podium montré (évite de le rejouer à chaque rafraîchissement)
 
 /* Identifie des résultats précis : un nouveau résultat rejoue le podium */
@@ -1207,14 +1207,9 @@ function closePodium() {
         return;
     }
 
-    const { root, onKey, onFs, previous } = podium;
+    const { root, onKey, previous } = podium;
 
     document.removeEventListener("keydown", onKey, true);
-    document.removeEventListener("fullscreenchange", onFs);
-
-    if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-    }
 
     root.remove();
     document.body.classList.remove("dialog-lock");
@@ -1222,18 +1217,6 @@ function closePodium() {
 
     if (previous && typeof previous.focus === "function") {
         previous.focus();
-    }
-}
-
-function togglePodiumFullscreen() {
-    if (!podium) {
-        return;
-    }
-
-    if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-    } else if (podium.root.requestFullscreen) {
-        podium.root.requestFullscreen().catch(() => {});
     }
 }
 
@@ -1287,7 +1270,6 @@ function showPodium(c) {
 
     root.innerHTML = `
         <div class="pd-bar">
-            ${document.fullscreenEnabled ? `<button type="button" class="pd-btn" data-act="fs">⛶ Plein écran</button>` : ""}
             <button type="button" class="pd-btn" data-act="close">Fermer ✕</button>
         </div>
 
@@ -1310,8 +1292,6 @@ function showPodium(c) {
 
         <div class="pd-confetti" aria-hidden="true">${confetti}</div>`;
 
-    const fsBtn = root.querySelector('[data-act="fs"]');
-
     const onKey = e => {
         if (e.key === "Escape") {
             e.preventDefault();
@@ -1319,22 +1299,11 @@ function showPodium(c) {
         }
     };
 
-    const onFs = () => {
-        if (fsBtn) {
-            fsBtn.textContent = document.fullscreenElement ? "⛶ Quitter le plein écran" : "⛶ Plein écran";
-        }
-    };
-
     root.querySelectorAll('[data-act="close"]').forEach(b => b.addEventListener("click", closePodium));
 
-    if (fsBtn) {
-        fsBtn.addEventListener("click", togglePodiumFullscreen);
-    }
-
-    podium = { root, onKey, onFs, previous: document.activeElement };
+    podium = { root, onKey, previous: document.activeElement };
 
     document.addEventListener("keydown", onKey, true);
-    document.addEventListener("fullscreenchange", onFs);
     document.body.classList.add("dialog-lock");
     document.body.appendChild(root);
 
