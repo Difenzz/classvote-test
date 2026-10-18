@@ -2324,6 +2324,73 @@ function initSigPads() {
     });
 }
 
+/* Découpe l'image au plus près du tracé pour qu'elle remplisse bien le cadre du PDF */
+function trimSig(url) {
+    return new Promise(resolve => {
+        const img = new Image();
+
+        img.onload = () => {
+            const src = document.createElement("canvas");
+
+            src.width  = img.width;
+            src.height = img.height;
+
+            const sctx = src.getContext("2d");
+
+            sctx.drawImage(img, 0, 0);
+
+            const d = sctx.getImageData(0, 0, src.width, src.height).data;
+            let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1;
+
+            for (let y = 0; y < src.height; y++) {
+                for (let x = 0; x < src.width; x++) {
+                    if (d[(y * src.width + x) * 4 + 3] > 8) {
+                        x0 = Math.min(x0, x);
+                        x1 = Math.max(x1, x);
+                        y0 = Math.min(y0, y);
+                        y1 = Math.max(y1, y);
+                    }
+                }
+            }
+
+            if (x1 < 0) {
+                return resolve(null);   // rien de dessiné
+            }
+
+            const pad = 6;
+            x0 = Math.max(0, x0 - pad);
+            y0 = Math.max(0, y0 - pad);
+            x1 = Math.min(src.width - 1, x1 + pad);
+            y1 = Math.min(src.height - 1, y1 + pad);
+
+            const w = x1 - x0 + 1;
+            const h = y1 - y0 + 1;
+            const out = document.createElement("canvas");
+
+            out.width  = w;
+            out.height = h;
+            out.getContext("2d").drawImage(src, x0, y0, w, h, 0, 0, w, h);
+            resolve({ url: out.toDataURL("image/png"), w, h });
+        };
+
+        img.onerror = () => resolve(null);
+        img.src = url;
+    });
+}
+
+async function trimmedSigs() {
+    const out = {};
+
+    for (const k of Object.keys(sigs)) {
+        const t = await trimSig(sigs[k]);
+
+        if (t) {
+            out[k] = t;
+        }
+    }
+    return out;
+}
+
 function clearSig(k) {
     const cv = $("#sig-" + k);
 
@@ -2362,10 +2429,11 @@ function drawSignatures(doc, p, y, sg) {
         doc.roundedRect(x, top + 6, bw, 30, 2, 2);
 
         if (img) {
-            const iw = Math.min(bw - 4, 26 * SIG_W / SIG_H);
-            const ih = iw * SIG_H / SIG_W;
+            const k  = Math.min((bw - 8) / img.w, 22 / img.h);
+            const iw = img.w * k;
+            const ih = img.h * k;
 
-            doc.addImage(img, "PNG", x + (bw - iw) / 2, top + 6 + (30 - ih) / 2, iw, ih);
+            doc.addImage(img.url, "PNG", x + (bw - iw) / 2, top + 6 + (30 - ih) / 2, iw, ih);
         }
     };
 
@@ -2727,7 +2795,7 @@ async function downloadMinutes() {
         const J   = await loadPdf();
         const doc = new J({ unit: "mm", format: "a4" });
 
-        drawMinutes(doc, p, sigs);
+        drawMinutes(doc, p, await trimmedSigs());
         pdfFooter(doc);
         doc.save(`proces-verbal-${slug(p.classe) || "classe"}.pdf`);
         note("Procès-verbal enregistré et téléchargé.", true);
