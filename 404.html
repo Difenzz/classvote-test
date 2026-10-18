@@ -17,67 +17,58 @@
 
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Caveat:wght@700&family=Source+Sans+3:wght@400;600;700&display=swap">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Public+Sans:wght@400;600;700&display=swap">
 
         <!-- Page autonome : elle doit s'afficher quel que soit le chemin demandé -->
         <style>
             :root {
                 color-scheme: light;
-                --bg: #F7F8FB; --surface: #fff; --ink: #1D2440; --ink-2: #596080; --line: #98A1C4;
-                --blue: #2438A6; --blue-dark: #182778; --on-blue: #fff; --red: #C8372A;
-                --seyes-1: rgba(70, 90, 185, .13); --seyes-2: rgba(70, 90, 185, .06); --margin: rgba(200, 55, 42, .38);
-                --display: "Bitter", Georgia, "Times New Roman", serif;
-                --text: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+                --bg: #F4F5F8; --surface: #fff; --ink: #25304B; --ink-2: #5E6A84; --line: #E0E4EC;
+                --blue: #4A64B0; --blue-dark: #3B5198; --on-blue: #fff; --press: #34467E; --red: #BC525A;
+                --display: "Fraunces", Georgia, "Times New Roman", serif;
+                --text: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             }
             :root[data-theme="dark"] {
                 color-scheme: dark;
-                --bg: #1B2226; --surface: #242D32; --ink: #ECEAE2; --ink-2: #A8B0B0; --line: #5A676D;
-                --blue: #8DB2FF; --blue-dark: #B0C9FF; --on-blue: #14191C; --red: #FF8B7B;
-                --seyes-1: rgba(200, 215, 230, .075); --seyes-2: rgba(200, 215, 230, .03); --margin: rgba(255, 139, 123, .3);
+                --bg: #12172A; --surface: #1A2038; --ink: #E7EAF3; --ink-2: #A6AFC7; --line: #2C3557;
+                --blue: #8FA3E0; --blue-dark: #AABAEA; --on-blue: #12172A; --press: #5C70B8; --red: #E38C94;
             }
             * { box-sizing: border-box; }
             body {
-                margin: 0; min-height: 100dvh; display: grid; grid-template-rows: 1fr auto;
-                background-color: var(--bg);
-                background-image:
-                    linear-gradient(var(--seyes-1) 1px, transparent 1px),
-                    linear-gradient(90deg, var(--seyes-1) 1px, transparent 1px),
-                    linear-gradient(var(--seyes-2) 1px, transparent 1px);
-                background-size: 32px 32px, 32px 32px, 32px 8px;
-                color: var(--ink); font: 400 17px/1.5 var(--text);
+                margin: 0; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto;
+                background: radial-gradient(900px 420px at 50% -140px, color-mix(in srgb, var(--blue) 9%, transparent), transparent 70%), var(--bg);
+                background-repeat: no-repeat; color: var(--ink); font: 400 16px/1.55 var(--text);
             }
-            body::before {
-                content: ""; position: fixed; top: 0; bottom: 0; left: max(6px, calc(50% - 524px));
-                z-index: -1; width: 2px; background: var(--margin);
-            }
+            .stripe { height: 3px; background: linear-gradient(90deg, var(--blue) 0 33.4%, var(--line) 33.4% 66.6%, var(--red) 66.6%); }
             main { display: grid; place-items: center; padding: 24px 16px; }
             .card {
                 width: 100%; max-width: 480px; padding: clamp(24px, 6vw, 40px); text-align: center;
-                background: var(--surface); border: 1.5px solid var(--line); border-radius: 6px;
+                background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+                box-shadow: 0 1px 2px rgba(37, 48, 75, .05), 0 12px 26px -16px rgba(37, 48, 75, .22);
             }
-            .num { font: 700 clamp(100px, 26vw, 150px)/.9 var(--display); color: var(--blue); }
+            .num { font: 600 clamp(110px, 30vw, 170px)/.9 var(--display); color: var(--blue); }
             .stamp {
-                display: inline-block; margin: 8px 0 16px; padding: 4px 14px; border: 3px solid var(--red);
-                border-radius: 4px; color: var(--red); font: 700 24px/1.1 var(--display);
-                letter-spacing: .04em; text-transform: uppercase; transform: rotate(-5deg);
+                display: inline-block; margin: 6px 0 14px; padding: 4px 16px; border: 2.5px solid var(--red);
+                border-radius: 10px; color: var(--red); font: 600 24px/1.1 var(--display);
+                letter-spacing: .04em; opacity: .9; transform: rotate(-5deg);
             }
-            h1 { margin: 0 0 6px; font: 700 clamp(26px, 6vw, 34px)/1.15 var(--display); }
+            h1 { margin: 0 0 8px; font: 600 clamp(30px, 6.4vw, 40px)/1.1 var(--display); letter-spacing: -.02em; }
             p { margin: 0 0 22px; color: var(--ink-2); }
             .btn {
-                display: inline-block; padding: 12px 22px; border-radius: 5px; background: var(--blue);
-                color: var(--on-blue); font-weight: 700; text-decoration: none;
+                display: inline-block; padding: 12px 22px; border-radius: 12px; background: var(--blue);
+                color: var(--on-blue); font-weight: 600; text-decoration: none;
+                box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--blue) 75%, transparent);
             }
             .btn:hover { background: var(--blue-dark); }
-            .btn:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
-            footer {
-                padding: 20px 16px calc(24px + env(safe-area-inset-bottom)); text-align: center;
-                background: var(--surface); border-top: 2px solid var(--ink); color: var(--ink-2); font-size: 14px;
-            }
+            .btn:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+            footer { padding: 20px 16px calc(24px + env(safe-area-inset-bottom)); text-align: center; color: var(--ink-2); font-size: 14px; }
             footer a { color: var(--ink); font-weight: 600; margin: 0 8px; }
         </style>
     </head>
 
     <body>
+        <div class="stripe"></div>
+
         <main>
             <section class="card">
                 <div class="num" aria-hidden="true">404</div>
