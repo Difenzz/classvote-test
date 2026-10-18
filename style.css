@@ -1504,3 +1504,10 @@ body.dialog-lock {
     touch-action: none;
     cursor: crosshair;
 }
+
+/* Podium : bouton « détail » plus discret */
+.pd-foot .pd-btn {
+    min-height: 36px;
+    padding: 5px 14px;
+    font-size: 14px;
+}
