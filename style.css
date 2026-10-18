@@ -1143,7 +1143,7 @@ body.dialog-lock {
     inset: 0;
     z-index: 110;
     display: grid;
-    grid-template-rows: 1fr auto;   /* contenu + pied (la barre du haut n'existe plus) */
+    grid-template-rows: 1fr auto;
     padding:
         max(14px, env(safe-area-inset-top))
         max(16px, env(safe-area-inset-right))
