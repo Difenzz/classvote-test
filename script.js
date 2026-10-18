@@ -3504,19 +3504,21 @@ function saveConsent() {
 
 /* --- 8.4 Contenu des pages légales ------------------------------------- */
 
-const TODO = t => `<mark class="todo">[${t}]</mark>`;
-const UPDATED = "15 octobre 2026";
+const TODO = () => "[]";   // à remplir : voir les emplacements « [] » dans les pages légales
+const UPDATED = "18 octobre 2026";
 
 const SLUGS = {
     legal:   "mentions-legales",
     cgu:     "cgu",
+    privacy: "confidentialite",
     cookies: "cookies"
 };
 
 const PAGE_TITLES = {
     legal:   "Mentions légales",
     cgu:     "Conditions générales d'utilisation",
-    cookies: "Cookies et données personnelles",
+    privacy: "Politique de confidentialité",
+    cookies: "Cookies",
     nf:      "Page introuvable"
 };
 
@@ -3534,53 +3536,71 @@ const docHTML = (title, body) => `
 
 function viewLegal() {
     return docHTML("Mentions légales", `
-        <h2>Éditeurs du site</h2>
-        <p>ClassVote est édité par <b>Enzo Perdu</b> et <b>Emerick Woiret</b>, personnes physiques.
-           Contact : ${TODO("enzo.perdu@outlook.fr")}</p>
+        <p class="muted small">Ces mentions sont publiées en application de l'article 6-III de la loi n° 2004-575
+           du 21 juin 2004 pour la confiance dans l'économie numérique (LCEN).</p>
 
-        <h2>Directeurs de la publication</h2>
+        <h2>1. Éditeurs du site</h2>
+        <p>ClassVote est édité, à titre non professionnel, par <b>Enzo Perdu</b> et <b>Emerick Woiret</b>,
+           personnes physiques.</p>
+        <p>Contact : ${TODO("enzo.perdu@outlook.fr")}</p>
+        <p>Conformément à l'article 6-III-2 de la LCEN, les éditeurs ayant la qualité de personnes non professionnelles
+           ont communiqué leur identité à l'hébergeur du site, qui peut la transmettre à l'autorité judiciaire.</p>
+
+        <h2>2. Directeurs de la publication</h2>
         <p>Enzo Perdu et Emerick Woiret.</p>
 
-        <h2>Hébergement</h2>
-        <p>Site : ${TODO("Vercel")}</p>
-        <p>Base de données et authentification : Supabase (supabase.com).</p>
+        <h2>3. Hébergement</h2>
+        <p>Site : ${TODO("nom, adresse postale et téléphone de l'hébergeur, par exemple Vercel Inc.")}</p>
+        <p>Base de données et authentification : Supabase (supabase.com), ${TODO("région d'hébergement choisie")}.</p>
 
-        <h2>Propriété intellectuelle</h2>
+        <h2>4. Propriété intellectuelle</h2>
         <p>© 2026 Enzo Perdu et Emerick Woiret. Tous droits réservés.</p>
-        <p>Le nom ClassVote, le code source, la conception graphique, les textes et l'organisation
-           de ce site sont la propriété exclusive d'Enzo Perdu et d'Emerick Woiret, ses auteurs.
-           Toute reproduction, représentation, modification ou exploitation, totale ou partielle,
-           sans leur autorisation écrite préalable est interdite
-           (articles L.111-1, L.122-4 et L.335-2 du Code de la propriété intellectuelle).</p>
+        <p>Le nom ClassVote, le code source, la conception graphique, les textes et l'organisation de ce site
+           sont la propriété exclusive de leurs auteurs, protégés par le Code de la propriété intellectuelle
+           (article L.111-1). Toute reproduction, représentation, modification ou exploitation, totale ou partielle,
+           sans leur autorisation écrite préalable est interdite (article L.122-4) et constitue une contrefaçon
+           punie de trois ans d'emprisonnement et de 300 000 € d'amende (article L.335-2).</p>
         <p>Les contenus saisis par les utilisateurs (prénoms, programmes) restent leur propriété ;
            ils autorisent seulement leur affichage dans l'élection concernée.</p>
         <p>Éléments tiers : polices Fraunces et Public Sans (licence SIL OFL, via Google Fonts)
            et bibliothèques Supabase JS, jsPDF et qrcode-generator (licence MIT).</p>
 
-        <h2>Responsabilité</h2>
-        <p>Le site est fourni sans garantie de disponibilité continue. Les éditeurs ne peuvent être tenus
-           responsables d'une interruption, d'une perte de données ou d'un usage non conforme du service.</p>
+        <h2>5. Responsabilité</h2>
+        <p>Les éditeurs s'efforcent de fournir un service fiable, mais ne sont tenus qu'à une obligation de moyens.
+           Leur responsabilité n'est engagée, conformément aux articles 1231-1 et 1240 du Code civil, qu'en cas de faute prouvée
+           ayant causé un dommage direct. Ils ne répondent pas d'une interruption, d'une perte de données
+           ou d'un usage non conforme du service.</p>
 
-        <h2>Données personnelles</h2>
-        <p>Voir la page <a href="#/cookies">Cookies et données personnelles</a>.</p>
+        <h2>6. Signalement d'un contenu illicite</h2>
+        <p>Tout contenu manifestement illicite peut être signalé à l'adresse de contact, avec la description des faits
+           et l'adresse de la page concernée (article 6-I-5 de la LCEN). Il sera retiré promptement.</p>
 
-        <h2>Droit applicable</h2>
-        <p>Le droit français s'applique. En cas de litige, les tribunaux français sont compétents,
-           sous réserve des règles protégeant les consommateurs.</p>`);
+        <h2>7. Données personnelles</h2>
+        <p>Le traitement des données est décrit dans la <a href="#/confidentialite">politique de confidentialité</a>
+           et la page <a href="#/cookies">Cookies</a>, conformément au règlement (UE) 2016/679 (RGPD)
+           et à la loi n° 78-17 du 6 janvier 1978 modifiée.</p>
+
+        <h2>8. Droit applicable</h2>
+        <p>Le droit français s'applique. En cas de litige, les parties cherchent d'abord une solution amiable ;
+           à défaut, les tribunaux français sont compétents, sous réserve des règles protégeant les consommateurs.</p>`);
 }
 
 function viewCgu() {
     return docHTML("Conditions générales d'utilisation", `
-        <h2>1. Objet</h2>
+        <h2>1. Objet et acceptation</h2>
         <p>ClassVote permet d'organiser l'élection des délégués d'une classe : candidatures en binôme
-           (titulaire et remplaçant), vote anonyme, résultats. Utiliser le site vaut acceptation des présentes conditions.</p>
+           (titulaire et remplaçant), vote anonyme, résultats. Le site est édité par Enzo Perdu et Emerick Woiret
+           (voir les <a href="#/mentions-legales">mentions légales</a>).</p>
+        <p>Ces conditions sont accessibles avant toute utilisation. Utiliser le site vaut acceptation
+           (articles 1103 et 1119 du Code civil). Si tu ne les acceptes pas, n'utilise pas le service.</p>
 
         <h2>2. Rôles</h2>
         <ul>
             <li><b>Professeur</b> : crée un compte, ouvre une élection, valide les élèves si besoin, ouvre le vote, publie les résultats.</li>
             <li><b>Élève</b> : entre le code à 6 chiffres, peut se porter candidat ou voter, sans compte.</li>
         </ul>
-        <p>Le service est prévu pour un usage scolaire. Les élèves mineurs l'utilisent sous la responsabilité du professeur qui organise l'élection.</p>
+        <p>Le service est prévu pour un usage scolaire et il est gratuit. Les élèves mineurs l'utilisent
+           sous la responsabilité du professeur qui organise l'élection.</p>
 
         <h2>3. Règles du vote</h2>
         <ul>
@@ -3590,34 +3610,133 @@ function viewCgu() {
         </ul>
 
         <h2>4. Comportement attendu</h2>
-        <p>Il est interdit de saisir des contenus injurieux, discriminatoires, diffamatoires ou illicites, d'usurper l'identité d'autrui,
-           de voter plusieurs fois par des moyens détournés ou de perturber le service (attaque, automatisation, tentative d'accès non autorisé).
-           Ne saisis que les informations demandées : l'acte de candidature (noms, présentation) n'est lu que par le professeur.
+        <p>Il est interdit :</p>
+        <ul>
+            <li>de saisir des contenus injurieux, discriminatoires, diffamatoires ou illicites (loi du 29 juillet 1881 sur la liberté de la presse) ;</li>
+            <li>d'usurper l'identité d'une autre personne (article 226-4-1 du Code pénal) ;</li>
+            <li>de voter plusieurs fois par des moyens détournés ;</li>
+            <li>de perturber le service, d'utiliser des outils automatisés ou de tenter d'accéder sans autorisation
+                au site ou à ses données : les articles 323-1 et suivants du Code pénal punissent l'accès frauduleux
+                à un système informatique et l'entrave à son fonctionnement.</li>
+        </ul>
+        <p>Ne saisis que les informations demandées. L'acte de candidature (noms, présentation) n'est lu que par le professeur.
            Le professeur peut supprimer une élection ou une candidature.</p>
 
         <h2>5. Compte professeur</h2>
-        <p>Le professeur est responsable de la confidentialité de son mot de passe et des élections qu'il crée.</p>
+        <p>Le professeur fournit une adresse e-mail exacte, garde son mot de passe confidentiel et prévient les éditeurs
+           en cas d'utilisation non autorisée de son compte. Il est responsable des élections qu'il crée.
+           Il peut supprimer son compte en écrivant à l'adresse de contact.</p>
 
-        <h2>6. Données personnelles</h2>
-        <p>Le traitement des données est décrit dans la page <a href="#/cookies">Cookies et données personnelles</a>.</p>
+        <h2>6. Mineurs</h2>
+        <p>Les élèves votent sans compte et sans donner leur nom. Lorsqu'un service en ligne demande des données
+           à un mineur de moins de quinze ans, l'accord du titulaire de l'autorité parentale est requis
+           (article 45 de la loi du 6 janvier 1978). L'utilisation du site en classe s'inscrit dans l'activité
+           organisée par le professeur, qui veille à informer les élèves et, au besoin, leurs représentants légaux.</p>
 
-        <h2>7. Propriété intellectuelle</h2>
-        <p>Le site appartient à Enzo Perdu et Emerick Woiret (voir les <a href="#/mentions-legales">mentions légales</a>).
-           Aucun droit sur le code, le nom ou le design n'est cédé aux utilisateurs.</p>
+        <h2>7. Contenus des utilisateurs</h2>
+        <p>Les utilisateurs restent propriétaires de ce qu'ils saisissent et garantissent ne pas porter atteinte aux droits d'autrui.
+           Les éditeurs agissent en qualité d'hébergeur de ces contenus (article 6-I-2 de la LCEN) : ils ne les contrôlent pas
+           a priori, mais retirent promptement tout contenu manifestement illicite dont ils ont connaissance.</p>
 
-        <h2>8. Responsabilité et disponibilité</h2>
-        <p>Le service est fourni « en l'état », sans garantie d'absence d'erreur ou d'interruption.
-           Les résultats ont une valeur pédagogique ; ils n'ont pas de valeur d'élection officielle.</p>
+        <h2>8. Données personnelles</h2>
+        <p>Le traitement des données est décrit dans la <a href="#/confidentialite">politique de confidentialité</a>
+           et la page <a href="#/cookies">Cookies</a>.</p>
 
-        <h2>9. Modification des conditions</h2>
+        <h2>9. Propriété intellectuelle</h2>
+        <p>Le site, son code, son nom et son design appartiennent à leurs auteurs. Aucun droit n'est cédé aux utilisateurs,
+           qui disposent seulement d'un droit d'usage personnel, non exclusif et non transmissible.</p>
+
+        <h2>10. Responsabilité et disponibilité</h2>
+        <p>Le service est fourni « en l'état », sans garantie d'absence d'erreur ou d'interruption. Il peut être suspendu
+           pour maintenance ou en cas de force majeure (article 1218 du Code civil). Les résultats ont une valeur pédagogique ;
+           ils n'ont pas la valeur d'une élection officielle. Aucune clause des présentes ne limite la responsabilité des éditeurs
+           en cas de faute lourde ou dolosive, ni les droits d'ordre public des consommateurs.</p>
+
+        <h2>11. Suspension</h2>
+        <p>En cas de manquement à ces conditions, les éditeurs peuvent supprimer un contenu, une élection ou un compte,
+           sans préjudice d'éventuelles poursuites.</p>
+
+        <h2>12. Modification des conditions</h2>
         <p>Les CGU peuvent évoluer ; la version en ligne fait foi, avec sa date de mise à jour.</p>
 
-        <h2>10. Droit applicable et contact</h2>
-        <p>Droit français. Contact : ${TODO("enzo.perdu@outlook.fr")}</p>`);
+        <h2>13. Droit applicable et contact</h2>
+        <p>Droit français. En cas de litige, une solution amiable est recherchée avant toute action devant les tribunaux français.
+           Contact : ${TODO("enzo.perdu@outlook.fr")}</p>`);
+}
+
+function viewPrivacy() {
+    return docHTML("Politique de confidentialité", `
+        <p class="muted small">Ce texte t'informe sur l'usage de tes données, conformément aux articles 12 à 14
+           du règlement (UE) 2016/679 (RGPD) et à la loi n° 78-17 du 6 janvier 1978 modifiée.</p>
+
+        <h2>1. Responsables du traitement</h2>
+        <p>Enzo Perdu et Emerick Woiret, éditeurs de ClassVote. Contact : ${TODO("enzo.perdu@outlook.fr")}.
+           Aucun délégué à la protection des données n'est désigné.</p>
+
+        <h2>2. Données, finalités et durées</h2>
+        <p>Seules les données nécessaires au fonctionnement de l'élection sont collectées (article 5 du RGPD).</p>
+        <div class="scroll"><table>
+            <tr><th>Personne</th><th>Données</th><th>Finalité et base légale</th><th>Durée</th></tr>
+            <tr><td>Professeur</td><td>Adresse e-mail, mot de passe (haché), élections créées</td><td>Gérer le compte et les élections. Exécution du service (art. 6.1.b)</td><td>Jusqu'à suppression du compte ; ${TODO("durée d'inactivité avant suppression")}</td></tr>
+            <tr><td>Élève</td><td>Identifiant technique anonyme de l'appareil, bulletin (sans nom), prénom ou pseudo si la validation est activée</td><td>Permettre un vote par appareil et garantir le secret du vote. Intérêt légitime (art. 6.1.f)</td><td>Supprimées avec l'élection</td></tr>
+            <tr><td>Candidat</td><td>Noms et prénoms du binôme, présentation, motivations, programme, slogan</td><td>Présenter les candidatures. Intérêt légitime (art. 6.1.f)</td><td>Acte de candidature supprimé à la clôture de l'élection ; le reste avec l'élection</td></tr>
+            <tr><td>Professeur</td><td>Procès-verbal (résultats, noms des élus, président et assesseurs)</td><td>Établir le procès-verbal. Exécution du service (art. 6.1.b)</td><td>Supprimé à la clôture de l'élection</td></tr>
+            <tr><td>Tous</td><td>Cookie de préférences (thème) et choix de consentement</td><td>Voir la page <a href="#/cookies">Cookies</a>. Consentement (art. 6.1.a) pour le thème</td><td>6 mois</td></tr>
+        </table></div>
+        <p>Les prénoms et le programme des candidats sont visibles par la classe ; l'acte complet n'est lu que par le professeur.
+           Les signatures dessinées à l'écran ne sont pas enregistrées : elles figurent uniquement dans le PDF que tu télécharges.
+           Aucune décision n'est prise de manière exclusivement automatisée (article 22 du RGPD), et aucune donnée n'est vendue.</p>
+
+        <h2>3. Destinataires</h2>
+        <ul>
+            <li>Le professeur qui organise l'élection, pour les données de sa classe.</li>
+            <li>Supabase, sous-traitant chargé de la base de données et de l'authentification (article 28 du RGPD).</li>
+            <li>L'hébergeur du site (voir les <a href="#/mentions-legales">mentions légales</a>).</li>
+            <li>Google (polices) et Cloudflare cdnjs (bibliothèques PDF et QR code) : ces services reçoivent ton adresse IP
+                lorsque ton navigateur charge ces ressources.</li>
+            <li>Les autorités, sur réquisition légale.</li>
+        </ul>
+
+        <h2>4. Transferts hors de l'Union européenne</h2>
+        <p>Certains prestataires peuvent traiter des données hors de l'Union européenne, notamment aux États-Unis.
+           Ces transferts sont encadrés par les articles 44 et suivants du RGPD (décision d'adéquation, dont le Data Privacy Framework,
+           ou clauses contractuelles types). ${TODO("région Supabase et garanties à confirmer")}</p>
+
+        <h2>5. Sécurité</h2>
+        <p>Les échanges sont chiffrés (HTTPS), les mots de passe sont hachés et l'accès aux données est restreint (article 32 du RGPD).
+           En cas de violation de données présentant un risque, les éditeurs préviennent la CNIL dans les 72 heures
+           (article 33) et les personnes concernées si le risque est élevé (article 34).</p>
+
+        <h2>6. Mineurs</h2>
+        <p>Les élèves peuvent voter sans donner leur nom. Les éditeurs ne demandent à un mineur de moins de quinze ans
+           aucune donnée allant au-delà de ce qui est nécessaire à l'élection, et l'accord d'un parent est requis
+           lorsque la loi l'exige (article 8 du RGPD, article 45 de la loi du 6 janvier 1978).
+           Un parent ou un élève peut demander la suppression d'une donnée à l'adresse de contact.</p>
+
+        <h2>7. Tes droits</h2>
+        <ul>
+            <li>accès (article 15), rectification (16) et effacement (17) ;</li>
+            <li>limitation (18) et opposition (21) du traitement ;</li>
+            <li>portabilité (20) des données fournies par le professeur ;</li>
+            <li>retrait du consentement à tout moment (article 7.3), sans effet sur ce qui a été fait avant ;</li>
+            <li>directives sur le sort de tes données après ton décès (article 85 de la loi de 1978).</li>
+        </ul>
+        <p>Écris à l'adresse de contact : une réponse t'est donnée sous un mois (article 12.3 du RGPD),
+           et une pièce d'identité peut être demandée en cas de doute sérieux.</p>
+
+        <h2>8. Réclamation</h2>
+        <p>Si tu estimes que tes droits ne sont pas respectés, tu peux saisir la CNIL, 3 place de Fontenoy,
+           TSA 80715, 75334 Paris Cedex 07 (<a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr/fr/plaintes</a>).</p>
+
+        <h2>9. Évolution du texte</h2>
+        <p>Cette politique peut changer ; la date de mise à jour figure en haut de la page.</p>`);
 }
 
 function viewCookies() {
-    return docHTML("Cookies et données personnelles", `
+    return docHTML("Cookies", `
+        <p class="muted small">Cette page applique l'article 82 de la loi n° 78-17 du 6 janvier 1978
+           (qui transpose la directive 2002/58/CE) et les lignes directrices de la CNIL du 17 septembre 2020.</p>
+
         <h2>Ce qui est stocké sur ton appareil</h2>
         <div class="scroll"><table>
             <tr><th>Nom</th><th>Rôle</th><th>Durée</th><th>Consentement</th></tr>
@@ -3627,25 +3746,21 @@ function viewCookies() {
             <tr><td>approved:… (professeur)</td><td>Repérer les doublons d'élèves, uniquement sur l'appareil du professeur</td><td>Jusqu'à effacement</td><td>Non requis (essentiel)</td></tr>
         </table></div>
         <p>Aucun cookie publicitaire, aucun outil de mesure d'audience, aucun suivi entre sites.</p>
+
+        <h2>Ton choix</h2>
+        <p>Les éléments essentiels sont nécessaires au service que tu demandes : ils ne demandent pas ton accord.
+           Les autres ne sont déposés qu'avec ton consentement. Refuser est aussi simple qu'accepter,
+           continuer à naviguer ne vaut pas accord, et ton choix est conservé 6 mois avant de t'être redemandé.
+           Tu peux le modifier ou le retirer à tout moment.</p>
         <div class="row"><button onclick="showConsent(true)">Modifier mes choix</button></div>
 
-        <h2>Responsables du traitement</h2>
-        <p>Enzo Perdu et Emerick Woiret. Contact : ${TODO("enzo.perdu@outlook.fr")}</p>
+        <h2>Depuis ton navigateur</h2>
+        <p>Tu peux aussi bloquer ou effacer les cookies dans les réglages de ton navigateur. Sans les éléments essentiels,
+           la connexion et le vote ne fonctionneront plus.</p>
 
-        <h2>Données traitées</h2>
-        <ul>
-            <li>Professeur : adresse e-mail et mot de passe (chiffré par Supabase), élections créées.</li>
-            <li>Élève : identifiant technique anonyme de l'appareil, bulletin (sans nom), prénom ou pseudo si la validation est activée.</li>
-            <li>Candidat : noms et prénoms du binôme, présentation, motivations, programme et slogan (acte de candidature). Les prénoms et le programme sont visibles par la classe ; l'acte complet n'est lu que par le professeur.</li>
-            <li>Professeur : procès-verbal de l'élection (résultats, noms des élus, président et assesseurs). Les signatures dessinées à l'écran ne sont pas enregistrées : elles figurent uniquement dans le PDF que tu télécharges.</li>
-        </ul>
-        <p>Finalités : faire fonctionner l'élection (exécution du service). Les actes de candidature et le procès-verbal sont supprimés dès que le professeur clôture l'élection ; le reste des données est supprimé avec l'élection.
-           Elles sont hébergées chez Supabase, qui agit comme sous-traitant.</p>
-        <p>Les polices sont chargées depuis Google Fonts : ton adresse IP est alors transmise à Google. Les bibliothèques PDF et QR code sont chargées depuis cdnjs (Cloudflare) quand tu les utilises.</p>
-
-        <h2>Tes droits</h2>
-        <p>Tu peux demander l'accès, la rectification ou l'effacement de tes données, ou t'opposer à leur traitement, en écrivant à l'adresse de contact.
-           Tu peux aussi introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr/fr/plaintes</a>).</p>`);
+        <h2>Pour aller plus loin</h2>
+        <p>Les données personnelles liées au service sont décrites dans la <a href="#/confidentialite">politique de confidentialité</a>.
+           Informations de la CNIL : <a href="https://www.cnil.fr/fr/cookies-et-traceurs-que-dit-la-loi" rel="noopener">cnil.fr/cookies</a>.</p>`);
 }
 
 function viewNotFound() {
@@ -3662,6 +3777,7 @@ function viewNotFound() {
 Object.assign(VIEWS, {
     legal:   viewLegal,
     cgu:     viewCgu,
+    privacy: viewPrivacy,
     cookies: viewCookies,
     nf:      viewNotFound
 });
