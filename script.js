@@ -2429,7 +2429,7 @@ function drawSignatures(doc, p, y, sg) {
         doc.roundedRect(x, top + 6, bw, 30, 2, 2);
 
         if (img) {
-            const k  = Math.min((bw - 8) / img.w, 22 / img.h);
+            const k  = Math.min((bw - 18) / img.w, 13 / img.h);
             const iw = img.w * k;
             const ih = img.h * k;
 
