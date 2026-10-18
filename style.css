@@ -1464,6 +1464,7 @@ body.dialog-lock {
 }
 
 .qr-box {
+    position: relative;
     width: min(76vw, 340px);
     min-height: 120px;
     margin: 12px auto;
@@ -1481,8 +1482,32 @@ body.dialog-lock {
     height: auto;
 }
 
-.qr-url {
-    overflow-wrap: anywhere;
+/* Logo au centre du QR code (fond blanc pour garder le contraste) */
+.qr-logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 21%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 0 0 3px #fff;
+}
+
+.qr-logo::after {
+    content: "";
+    position: absolute;
+    inset: 17%;
+    background: var(--blue);
+    -webkit-mask: var(--logo) center / contain no-repeat;
+    mask: var(--logo) center / contain no-repeat;
+}
+
+/* Code à 6 chiffres centré sous le QR code */
+.qr-dialog .code {
+    justify-content: center;
+    margin: 14px auto 0;
 }
 
 
