@@ -1359,6 +1359,10 @@ function render() {
     syncRealtime();
     setTitle();
     maybePodium();
+
+    if (view === "dossier") {
+        initSigPads();
+    }
 }
 
 
@@ -2172,7 +2176,7 @@ function schoolYear() {
 }
 
 /* « PROCÈS-VERBAL D'ÉLECTION DES DÉLÉGUÉS DE CLASSE » */
-function drawMinutes(doc, p) {
+function drawMinutes(doc, p, sg = {}) {
     const M = 18, W = 210, w = W - 2 * M;
     const dots = (v, n) => v || ".".repeat(n);
     let y = 22;
@@ -2217,21 +2221,164 @@ function drawMinutes(doc, p) {
     doc.text("Élèves élus délégués :", M, y);
     y += 3;
 
-    y = pdfTable(doc, M, y, [84, 30, 60],
-        ["TITULAIRE + SUPPLÉANT", "Régime : D.P, EXT", "Signatures"],
-        p.elus.map(e => [e.name || "/", e.regime || "/", ""]), 14) + 12;
+    y = pdfTable(doc, M, y, [114, 60],
+        ["TITULAIRE + SUPPLÉANT", "Régime : D.P, EXT"],
+        p.elus.map(e => [e.name || "/", e.regime || "/"]), 10) + 12;
 
-    if (y > 235) {
+    doc.setFont("helvetica", "normal");
+    drawSignatures(doc, p, y, sg);
+}
+
+/* --- Signatures du procès-verbal ---------------------------------------
+   Dessinées à l'écran (doigt ou souris), uniquement gardées en mémoire :
+   rien n'est envoyé à la base. Une zone vide reste un cadre à signer à la main. */
+
+const SIG_SLOTS = [
+    ["pres", "Président de séance (professeur)"],
+    ["ass0", "Assesseur 1"],
+    ["ass1", "Assesseur 2"],
+    ["bin0", "Binôme élu 1"],
+    ["bin1", "Binôme élu 2"]
+];
+const SIG_W = 600, SIG_H = 220;   // taille interne des zones de dessin
+
+let sigs      = {};     // { pres, ass0, ass1, bin0, bin1 } → image PNG (data URL)
+let sigsClass = null;   // classe à laquelle appartiennent les signatures
+
+function sigPadsHTML() {
+    return SIG_SLOTS.map(([k, label]) => `
+        <div class="sig">
+            <span class="small muted">${label}</span>
+            <canvas class="sig-pad" id="sig-${k}" width="${SIG_W}" height="${SIG_H}"
+                    role="img" aria-label="Zone de signature : ${label}"></canvas>
+            <button type="button" class="link" onclick="clearSig('${k}')">Effacer</button>
+        </div>`).join("");
+}
+
+function initSigPads() {
+    SIG_SLOTS.forEach(([k]) => {
+        const cv = $("#sig-" + k);
+
+        if (!cv) {
+            return;
+        }
+
+        const ctx = cv.getContext("2d");
+        let drawing = false;
+        let last = null;
+
+        ctx.lineWidth   = 4;
+        ctx.lineCap     = "round";
+        ctx.lineJoin    = "round";
+        ctx.strokeStyle = ctx.fillStyle = "#0F1B3D";
+
+        /* Signature déjà dessinée (retour sur l'écran) */
+        if (sigs[k]) {
+            const img = new Image();
+
+            img.onload = () => ctx.drawImage(img, 0, 0);
+            img.src = sigs[k];
+        }
+
+        const pos = e => {
+            const r = cv.getBoundingClientRect();
+
+            return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height];
+        };
+
+        cv.onpointerdown = e => {
+            e.preventDefault();
+            cv.setPointerCapture(e.pointerId);
+            drawing = true;
+            last = pos(e);
+            ctx.beginPath();
+            ctx.arc(last[0], last[1], 2, 0, Math.PI * 2);
+            ctx.fill();
+        };
+
+        cv.onpointermove = e => {
+            if (!drawing) {
+                return;
+            }
+
+            const p = pos(e);
+
+            ctx.beginPath();
+            ctx.moveTo(last[0], last[1]);
+            ctx.lineTo(p[0], p[1]);
+            ctx.stroke();
+            last = p;
+        };
+
+        const end = () => {
+            if (drawing) {
+                drawing = false;
+                sigs[k] = cv.toDataURL("image/png");
+            }
+        };
+
+        cv.onpointerup = end;
+        cv.onpointercancel = end;
+    });
+}
+
+function clearSig(k) {
+    const cv = $("#sig-" + k);
+
+    delete sigs[k];
+
+    if (cv) {
+        cv.getContext("2d").clearRect(0, 0, cv.width, cv.height);
+    }
+}
+
+/* Bloc « SIGNATURES » en bas du PV : 3 cadres, puis 2 cadres pour les binômes élus */
+function drawSignatures(doc, p, y, sg) {
+    const M = 18;
+
+    if (y > 188) {
         doc.addPage();
         y = 22;
     }
 
-    doc.setFont("helvetica", "normal");
-    doc.text(pdfSafe("Signature du président de séance : " + (p.president || "")), M, y);
-    y += 24;
-    doc.text(pdfSafe("Les assesseurs : " + [p.assesseurs[0], p.assesseurs[1]].filter(Boolean).join("   ")), M, y);
-    y += 24;
-    doc.text("Binôme de titulaires :", M, y);
+    doc.setTextColor(15, 27, 61);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("SIGNATURES", M, y);
+    y += 6;
+
+    const box = (x, top, bw, label, name, img) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(pdfSafe(label), x, top);
+
+        doc.setFont("helvetica", "normal");
+        doc.text(doc.splitTextToSize(pdfSafe(name || ""), bw)[0] || "", x, top + 4.2);
+
+        doc.setDrawColor(150, 160, 190);
+        doc.setLineWidth(.3);
+        doc.roundedRect(x, top + 6, bw, 30, 2, 2);
+
+        if (img) {
+            const iw = Math.min(bw - 4, 26 * SIG_W / SIG_H);
+            const ih = iw * SIG_H / SIG_W;
+
+            doc.addImage(img, "PNG", x + (bw - iw) / 2, top + 6 + (30 - ih) / 2, iw, ih);
+        }
+    };
+
+    [
+        ["Président de séance", p.president,      sg.pres],
+        ["Assesseur 1",         p.assesseurs[0],  sg.ass0],
+        ["Assesseur 2",         p.assesseurs[1],  sg.ass1]
+    ].forEach(([label, name, img], i) => box(M + i * 59, y, 56, label, name, img));
+
+    y += 46;
+
+    [
+        ["Binôme élu 1 (titulaire + suppléant)", p.elus[0].name, sg.bin0],
+        ["Binôme élu 2 (titulaire + suppléant)", p.elus[1].name, sg.bin1]
+    ].forEach(([label, name, img], i) => box(M + i * 88.5, y, 85.5, label, name, img));
 }
 
 function note(text, ok) {
@@ -2412,6 +2559,8 @@ function viewDossier(m) {
             </td>
         </tr>`).join("");
 
+    const padsHTML = sigPadsHTML();
+
     return `
         <h1>Dossier · ${esc(c.name)}</h1>
         <p class="muted">Réservé au professeur : actes de candidature et procès-verbal.</p>
@@ -2459,6 +2608,12 @@ function viewDossier(m) {
                 ${field("pv-ass1", "Assesseur 2", pm.assesseurs[1])}
             </div>
 
+            <h2>Signatures</h2>
+            <p class="muted small">Signe avec le doigt ou la souris. Une zone laissée vide devient un cadre vide
+               dans le PDF, à signer à la main après impression. Les signatures ne sont pas enregistrées :
+               elles restent sur cet écran jusqu'au rechargement de la page, et n'apparaissent que dans le PDF téléchargé.</p>
+            <div class="sigs">${padsHTML}</div>
+
             <div class="row">
                 <button class="go">Enregistrer</button>
                 <button type="button" onclick="downloadMinutes()">Enregistrer et télécharger (PDF)</button>
@@ -2483,6 +2638,10 @@ Object.assign(VIEWS, { dossier: viewDossier });
 
 function openDossier(k) {
     if (prof) {
+        if (sigsClass !== k) {
+            sigs = {};
+            sigsClass = k;
+        }
         cur = k;
         go("dossier");
     }
@@ -2525,6 +2684,8 @@ async function closeElection() {
         await api.purgeDossier(code);
         minutes = null;
         acts    = [];
+        sigs    = {};
+        sigsClass = null;
 
         /* 2. La classe elle-même (binômes, accès et bulletins partent en cascade) */
         await api.deleteClass(code);
@@ -2553,7 +2714,7 @@ async function downloadMinutes() {
         const J   = await loadPdf();
         const doc = new J({ unit: "mm", format: "a4" });
 
-        drawMinutes(doc, p);
+        drawMinutes(doc, p, sigs);
         pdfFooter(doc);
         doc.save(`proces-verbal-${slug(p.classe) || "classe"}.pdf`);
         note("Procès-verbal enregistré et téléchargé.", true);
@@ -3301,7 +3462,7 @@ function viewCookies() {
             <li>Professeur : adresse e-mail et mot de passe (chiffré par Supabase), élections créées.</li>
             <li>Élève : identifiant technique anonyme de l'appareil, bulletin (sans nom), prénom ou pseudo si la validation est activée.</li>
             <li>Candidat : noms et prénoms du binôme, présentation, motivations, programme et slogan (acte de candidature). Les prénoms et le programme sont visibles par la classe ; l'acte complet n'est lu que par le professeur.</li>
-            <li>Professeur : procès-verbal de l'élection (résultats, noms des élus, président et assesseurs).</li>
+            <li>Professeur : procès-verbal de l'élection (résultats, noms des élus, président et assesseurs). Les signatures dessinées à l'écran ne sont pas enregistrées : elles figurent uniquement dans le PDF que tu télécharges.</li>
         </ul>
         <p>Finalités : faire fonctionner l'élection (exécution du service). Les actes de candidature et le procès-verbal sont supprimés dès que le professeur clôture l'élection ; le reste des données est supprimé avec l'élection.
            Elles sont hébergées chez Supabase, qui agit comme sous-traitant.</p>
