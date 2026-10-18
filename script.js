@@ -1481,6 +1481,21 @@ async function newClass() {
 
 async function phase(k, p, next = "dash") {
     try {
+        /* Publier les résultats = clôturer d'abord le tour en cours : sans cela, aucun siège
+           n'est attribué et le podium annonce qu'aucun binôme n'est élu */
+        const known = (cls && cls.code === k ? cls : null) || myClasses.find(x => x.code === k);
+
+        if (p === "res" && known && known.phase === "vote") {
+            try {
+                await api.closeRound(k);
+            } catch (e) {
+                /* Aucun bulletin dans ce tour, ou vote déjà clos : rien à clôturer */
+                if (!/aucun bulletin|pas ouvert/i.test(String((e && e.message) || e))) {
+                    throw e;
+                }
+            }
+        }
+
         await api.setPhase(k, p);
         go(next);
     } catch (e) {
