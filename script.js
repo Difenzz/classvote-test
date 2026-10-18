@@ -618,7 +618,7 @@ function classCardHTML(c) {
 /* Une ligne de résultat avec sa barre (le trait central = majorité à 50 %) */
 function barRowHTML(x, total, winners) {
     const pct   = percent(x.votes, total);
-    const crown = [].concat(winners || []).includes(x.id) ? ` <span class="tag win">élu</span>` : "";
+    const crown = [].concat(winners || []).includes(x.id) ? " 🏆" : "";
 
     return `
         <div class="bar-row">
@@ -695,7 +695,7 @@ function viewHome(m) {
     return `
         <form class="box narrow" onsubmit="event.preventDefault(); joinCode()">
 
-            <h1>Élection des délégués</h1>
+            <h1>🗳️ Élection des délégués</h1>
             <p class="muted">Entre le code donné par ton professeur.</p>
 
             <input id="code" class="code-in"
@@ -746,7 +746,7 @@ function viewCandidate(m) {
         left = `
             <div class="box">
                 <h2>Ton binôme</h2>
-                <p>${esc(mine.t)} (titulaire) &amp; ${esc(mine.r)} (remplaçant)</p>
+                <p>✅ ${esc(mine.t)} (titulaire) &amp; ${esc(mine.r)} (remplaçant)</p>
                 ${withdrawButton}
                 ${m}
             </div>`;
@@ -834,7 +834,7 @@ function viewVoter(m) {
     if (c.phase === "cand") {
         status = `<p class="notice">Les candidatures sont ouvertes : les binômes apparaissent ici au fur et à mesure. Le vote s'ouvrira bientôt.</p>`;
     } else if (voted) {
-        status = `<p class="notice">Ton bulletin est enregistré pour ce tour. Attends la fin du tour…</p>`;
+        status = `<p class="notice">Ton bulletin est enregistré pour ce tour ✅ Attends la fin du tour…</p>`;
     } else {
         const choose = picks > 1 ? " Tu peux choisir 1 ou 2 binômes." : "";
 
@@ -845,7 +845,7 @@ function viewVoter(m) {
     let accessHTML = "";
 
     if (waiting) {
-        accessHTML = `<p class="notice">En attente de validation par ton professeur…</p>`;
+        accessHTML = `<p class="notice">⏳ En attente de validation par ton professeur…</p>`;
     } else if (showForm) {
         const refused = myAccess.status === "refused"
             ? `<p class="notice">Demande refusée par ton professeur.</p>`
@@ -1007,7 +1007,7 @@ function accessBoxHTML(c) {
 
     const rows = pending.map(a => {
         const dup = count[fold(a.pseudo)] > 1
-            ? ` <span class="tag warn">Doublon possible</span>`
+            ? ` <span class="tag warn">⚠ doublon possible</span>`
             : "";
 
         return `
@@ -1072,7 +1072,7 @@ function viewLive(m) {
             .map(x => `${esc(x.t)} &amp; ${esc(x.r)}`)
             .join(" et ");
 
-        verdict = `<p class="notice">${names} ${qualified.length > 1 ? "ont" : "a"} la majorité absolue : tu peux clôturer le tour.</p>`;
+        verdict = `<p class="notice">✅ ${names} ${qualified.length > 1 ? "ont" : "a"} la majorité absolue : tu peux clôturer le tour.</p>`;
     } else {
         verdict = `<p class="notice">Majorité absolue : ${needed} voix sur ${c.valid} exprimée(s). Pas encore atteinte.</p>`;
     }
@@ -1146,7 +1146,7 @@ function viewResults(m) {
         ? `<div class="grid">${elected.map(x => `
               <div class="box winner">
                   <span class="tag win">Binôme n°${x.seat}</span>
-                  <h2>${esc(x.t)} &amp; ${esc(x.r)}</h2>
+                  <h2>🏆 ${esc(x.t)} &amp; ${esc(x.r)}</h2>
                   <p class="muted">Titulaire : ${esc(x.t)} · Remplaçant : ${esc(x.r)}</p>
               </div>`).join("")}</div>`
         : `<p class="notice">Aucun binôme n'a encore été élu à la majorité absolue.</p>`;
@@ -1239,7 +1239,7 @@ function showPodium(c) {
     const delayOf  = r => 2.1 + (n - r) * 1.3;          // rang 1 = dernier révélé
     const finalAt  = n ? delayOf(1) + .7 : 0;
     const order    = n === 0 ? [] : n === 1 ? [1] : n === 2 ? [2, 1] : [2, 1, 3];   // 2e à gauche, 1er au centre
-    const colors   = ["#E8BB3F", "#8DB2FF", "#FF8B7B", "#74D6A0"];
+    const colors   = ["#E8CB7C", "#8FA3E0", "#E0959B", "#86C9A8"];
 
     const cols = order.map(r => {
         const x = list[r - 1];
@@ -1247,7 +1247,7 @@ function showPodium(c) {
         return `
             <div class="pd-col pd-r${r}" style="--d:${delayOf(r).toFixed(2)}s">
                 <div class="pd-who">
-                    ${r === 1 ? `<span class="pd-crown" aria-hidden="true"><svg viewBox="0 0 32 22"><path d="M2 20 0 5l8 6 8-10 8 10 8-6-2 15z" fill="#E8BB3F"/></svg></span>` : ""}
+                    ${r === 1 ? `<span class="pd-crown" aria-hidden="true">👑</span>` : ""}
                     <b>${esc(x.t)} &amp; ${esc(x.r)}</b>
                     <span>Titulaire : ${esc(x.t)} · Remplaçant : ${esc(x.r)}</span>
                 </div>
@@ -2042,6 +2042,20 @@ const pdfSafe = s => String(s ?? "")
     .replace(/[–—]/g, "-").replace(/œ/g, "oe").replace(/Œ/g, "Oe")
     .replace(/[^\n\u0020-\u007E\u00A0-\u00FF]/g, "");
 
+/* Palette du PDF : mêmes teintes que le site, version douce */
+const PDF = {
+    ink:    [37, 48, 75],      // texte
+    navy:   [52, 68, 112],     // bandeau et en-têtes de tableau
+    blue:   [74, 100, 176],
+    red:    [188, 82, 90],
+    mid:    [226, 230, 238],   // bande centrale du liseré
+    line:   [205, 211, 225],   // traits fins
+    frame:  [176, 184, 205],   // cadre de page
+    zebra:  [245, 247, 251],
+    muted:  [125, 133, 156],
+    sub:    [216, 223, 242]    // sous-titre du bandeau
+};
+
 const slug = s => fold(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 function pdfFinish(doc) {
@@ -2051,23 +2065,22 @@ function pdfFinish(doc) {
     for (let i = 1; i <= n; i++) {
         doc.setPage(i);
 
-        doc.setFillColor(30, 63, 204);
-        doc.rect(0, 0, 70, 3.2, "F");
-        doc.setFillColor(226, 230, 241);
-        doc.rect(70, 0, 70, 3.2, "F");
-        doc.setFillColor(212, 47, 62);
-        doc.rect(140, 0, 70, 3.2, "F");
+        /* Liseré bleu · blanc · rouge en haut de page */
+        doc.setFillColor(...PDF.blue);
+        doc.rect(0, 0, 70, 2.4, "F");
+        doc.setFillColor(...PDF.mid);
+        doc.rect(70, 0, 70, 2.4, "F");
+        doc.setFillColor(...PDF.red);
+        doc.rect(140, 0, 70, 2.4, "F");
 
-        doc.setDrawColor(15, 27, 61);
-        doc.setLineWidth(.7);
-        doc.rect(10, 10, 190, 276);
-        doc.setDrawColor(30, 63, 204);
-        doc.setLineWidth(.2);
-        doc.rect(11.6, 11.6, 186.8, 272.8);
+        /* Cadre fin aux angles arrondis */
+        doc.setDrawColor(...PDF.frame);
+        doc.setLineWidth(.35);
+        doc.roundedRect(10, 10, 190, 276, 3, 3);
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.setTextColor(110, 118, 145);
+        doc.setTextColor(...PDF.muted);
         doc.text("Document généré par ClassVote le " + today, 18, 291.5);
         doc.text("Page " + i + " / " + n, 192, 291.5, { align: "right" });
     }
@@ -2077,15 +2090,18 @@ function pdfBanner(doc, lines, sub) {
     const M = 18, w = 174, y0 = 17;
     const h = 7 + lines.length * 7.5 + (sub ? 8 : 0);
 
-    doc.setFillColor(15, 27, 61);
-    doc.rect(M, y0, w, h, "F");
+    /* Bandeau arrondi */
+    doc.setFillColor(...PDF.navy);
+    doc.roundedRect(M, y0, w, h, 3, 3, "F");
 
-    doc.setFillColor(30, 63, 204);
-    doc.rect(M, y0 + h, w / 3, 1.6, "F");
-    doc.setFillColor(226, 230, 241);
-    doc.rect(M + w / 3, y0 + h, w / 3, 1.6, "F");
-    doc.setFillColor(212, 47, 62);
-    doc.rect(M + 2 * w / 3, y0 + h, w / 3, 1.6, "F");
+    /* Petit liseré tricolore centré sous le bandeau */
+    const sw = 22, sy = y0 + h + 3.6;
+    doc.setFillColor(...PDF.blue);
+    doc.roundedRect(105 - sw * 1.5, sy, sw, 1.2, .6, .6, "F");
+    doc.setFillColor(...PDF.mid);
+    doc.rect(105 - sw * .5, sy, sw, 1.2, "F");
+    doc.setFillColor(...PDF.red);
+    doc.roundedRect(105 + sw * .5, sy, sw, 1.2, .6, .6, "F");
 
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
@@ -2095,20 +2111,20 @@ function pdfBanner(doc, lines, sub) {
     if (sub) {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
-        doc.setTextColor(205, 213, 240);
+        doc.setTextColor(...PDF.sub);
         doc.text(pdfSafe(sub), 105, y0 + 9 + lines.length * 7.5 + .5, { align: "center" });
     }
 
-    doc.setTextColor(15, 27, 61);
-    return y0 + h + 11;
+    doc.setTextColor(...PDF.ink);
+    return y0 + h + 12;
 }
 
 function pdfHeading(doc, text, y) {
-    doc.setFillColor(30, 63, 204);
-    doc.rect(18, y - 4, 1.8, 5.2, "F");
+    doc.setFillColor(...PDF.blue);
+    doc.roundedRect(18, y - 4, 1.6, 5.2, .8, .8, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.5);
-    doc.setTextColor(15, 27, 61);
+    doc.setTextColor(...PDF.ink);
     doc.text(pdfSafe(text), 22, y);
     return y + 4;
 }
@@ -2127,6 +2143,7 @@ function drawAct(doc, a) {
 
     y = pdfBanner(doc, ["ACTE DE CANDIDATURE"], "Élection des délégués de classe");
     doc.setFontSize(11);
+    doc.setTextColor(...PDF.ink);
 
     const field = (label, value) => {
         doc.setFont("helvetica", "bold");
@@ -2158,9 +2175,9 @@ function drawAct(doc, a) {
         doc.text(head, M, y);
         y += head.length * 5 + 1.5;
 
-        doc.setDrawColor(150, 160, 190);
-        doc.setLineWidth(.3);
-        doc.roundedRect(M, y, w, h, 2, 2);
+        doc.setDrawColor(...PDF.line);
+        doc.setLineWidth(.35);
+        doc.roundedRect(M, y, w, h, 2.5, 2.5);
 
         doc.setFont("helvetica", "normal");
         doc.text(lines, M + 4, y + 6.5);
@@ -2180,9 +2197,9 @@ function drawAct(doc, a) {
 
 /* Tableau simple : chaque ligne s'adapte à son texte */
 function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
-    doc.setDrawColor(90, 100, 130);
+    doc.setDrawColor(...PDF.line);
     doc.setLineWidth(.25);
-    doc.setTextColor(15, 27, 61);
+    doc.setTextColor(...PDF.ink);
 
     const draw = (cells, bold, zebra) => {
         doc.setFont("helvetica", bold ? "bold" : "normal");
@@ -2200,16 +2217,16 @@ function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
 
         cells.forEach((_, i) => {
             if (bold) {
-                doc.setFillColor(15, 27, 61);
+                doc.setFillColor(...PDF.navy);
                 doc.rect(cx, y, widths[i], h, "FD");
                 doc.setTextColor(255, 255, 255);
             } else if (zebra) {
-                doc.setFillColor(240, 243, 251);
+                doc.setFillColor(...PDF.zebra);
                 doc.rect(cx, y, widths[i], h, "FD");
-                doc.setTextColor(15, 27, 61);
+                doc.setTextColor(...PDF.ink);
             } else {
                 doc.rect(cx, y, widths[i], h);
-                doc.setTextColor(15, 27, 61);
+                doc.setTextColor(...PDF.ink);
             }
             /* Texte centré dans la case, horizontalement et verticalement (« / » compris) */
             const top = y + (h - lines[i].length * 4.4) / 2;
@@ -2338,7 +2355,7 @@ function initSigPads() {
         ctx.lineWidth   = 4;
         ctx.lineCap     = "round";
         ctx.lineJoin    = "round";
-        ctx.strokeStyle = ctx.fillStyle = "#0F1B3D";
+        ctx.strokeStyle = ctx.fillStyle = "#25304B";
 
         /* Signature déjà dessinée (retour sur l'écran) */
         if (sigs[k]) {
@@ -2478,7 +2495,7 @@ function drawSignatures(doc, p, y, sg) {
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(15, 27, 61);
+    doc.setTextColor(...PDF.ink);
     doc.text(pdfSafe("Fait à " + ".".repeat(28) + ", le " + (p.date || ".".repeat(14))), M, y);
     y += 10;
     y = pdfHeading(doc, "SIGNATURES", y) + 3;
@@ -2491,9 +2508,9 @@ function drawSignatures(doc, p, y, sg) {
         doc.setFont("helvetica", "normal");
         doc.text(doc.splitTextToSize(pdfSafe(name || ""), bw)[0] || "", x, top + 4.2);
 
-        doc.setDrawColor(150, 160, 190);
-        doc.setLineWidth(.3);
-        doc.roundedRect(x, top + 6, bw, 30, 2, 2);
+        doc.setDrawColor(...PDF.line);
+        doc.setLineWidth(.35);
+        doc.roundedRect(x, top + 6, bw, 30, 2.5, 2.5);
 
         if (img) {
             const k  = Math.min((bw - 18) / img.w, 13 / img.h);
@@ -3296,7 +3313,7 @@ function notifyAccess(code, rows, className) {
         const same = x => fold(x.pseudo) === fold(a.pseudo);
         const dup  = !!a.pseudo && (loadApproved(code).some(same) || pending.filter(same).length > 1);
 
-        toast(name + " demande à voter" + where + (dup ? " (doublon possible)" : ""), [
+        toast(name + " demande à voter" + where + (dup ? " ⚠ doublon possible" : ""), [
             { label: "Valider", run: () => decideFromToast(code, a.voter_id, true,  name) },
             { label: "Refuser", cls: "danger", run: () => decideFromToast(code, a.voter_id, false, name) }
         ]);
@@ -3382,7 +3399,7 @@ function setTheme(theme, persist) {
 
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-        meta.content = theme === "dark" ? "#0B1020" : "#F2F4F9";
+        meta.content = theme === "dark" ? "#12172A" : "#F4F5F8";
     }
 
     const btn = $("#theme-btn");
@@ -3524,7 +3541,7 @@ function viewLegal() {
            (articles L.111-1, L.122-4 et L.335-2 du Code de la propriété intellectuelle).</p>
         <p>Les contenus saisis par les utilisateurs (prénoms, programmes) restent leur propriété ;
            ils autorisent seulement leur affichage dans l'élection concernée.</p>
-        <p>Éléments tiers : polices Bitter, Caveat et Source Sans 3 (licence SIL OFL, via Google Fonts)
+        <p>Éléments tiers : polices Fraunces et Public Sans (licence SIL OFL, via Google Fonts)
            et bibliothèques Supabase JS, jsPDF et qrcode-generator (licence MIT).</p>
 
         <h2>Responsabilité</h2>
