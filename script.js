@@ -2931,7 +2931,7 @@ function loadQr() {
 /* Renvoie le QR code (SVG) du texte donné */
 async function qrSvg(text) {
     const make = await loadQr();
-    const qr   = make(0, "M");
+    const qr   = make(0, "H");   /* niveau H : tolère le logo au centre */
 
     qr.addData(text);
     qr.make();
@@ -2958,7 +2958,6 @@ async function showQr(code) {
             <p>Scanne ce QR code avec l'appareil photo, ou entre le code à la main.</p>
             <div class="qr-box" id="qr-box" aria-label="QR code vers l'élection">Chargement…</div>
             <div class="code" aria-label="Code ${esc(code)}">${[...code].map(d => `<span>${esc(d)}</span>`).join("")}</div>
-            <p class="small muted qr-url">${esc(url)}</p>
             <p class="small" id="qr-status" role="status"></p>
             <div class="row dialog-actions">
                 <button type="button" data-act="copy">Copier le lien</button>
@@ -3019,7 +3018,7 @@ async function showQr(code) {
         const box = root.querySelector("#qr-box");
 
         if (box) {
-            box.innerHTML = svg;
+            box.innerHTML = svg + '<span class="qr-logo" aria-hidden="true"></span>';
         }
     } catch (e) {
         const box = root.querySelector("#qr-box");
