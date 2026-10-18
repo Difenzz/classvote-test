@@ -618,7 +618,7 @@ function classCardHTML(c) {
 /* Une ligne de résultat avec sa barre (le trait central = majorité à 50 %) */
 function barRowHTML(x, total, winners) {
     const pct   = percent(x.votes, total);
-    const crown = [].concat(winners || []).includes(x.id) ? " 🏆" : "";
+    const crown = [].concat(winners || []).includes(x.id) ? ` <span class="tag win">élu</span>` : "";
 
     return `
         <div class="bar-row">
@@ -695,7 +695,7 @@ function viewHome(m) {
     return `
         <form class="box narrow" onsubmit="event.preventDefault(); joinCode()">
 
-            <h1>🗳️ Élection des délégués</h1>
+            <h1>Élection des délégués</h1>
             <p class="muted">Entre le code donné par ton professeur.</p>
 
             <input id="code" class="code-in"
@@ -746,7 +746,7 @@ function viewCandidate(m) {
         left = `
             <div class="box">
                 <h2>Ton binôme</h2>
-                <p>✅ ${esc(mine.t)} (titulaire) &amp; ${esc(mine.r)} (remplaçant)</p>
+                <p>${esc(mine.t)} (titulaire) &amp; ${esc(mine.r)} (remplaçant)</p>
                 ${withdrawButton}
                 ${m}
             </div>`;
@@ -834,7 +834,7 @@ function viewVoter(m) {
     if (c.phase === "cand") {
         status = `<p class="notice">Les candidatures sont ouvertes : les binômes apparaissent ici au fur et à mesure. Le vote s'ouvrira bientôt.</p>`;
     } else if (voted) {
-        status = `<p class="notice">Ton bulletin est enregistré pour ce tour ✅ Attends la fin du tour…</p>`;
+        status = `<p class="notice">Ton bulletin est enregistré pour ce tour. Attends la fin du tour…</p>`;
     } else {
         const choose = picks > 1 ? " Tu peux choisir 1 ou 2 binômes." : "";
 
@@ -845,7 +845,7 @@ function viewVoter(m) {
     let accessHTML = "";
 
     if (waiting) {
-        accessHTML = `<p class="notice">⏳ En attente de validation par ton professeur…</p>`;
+        accessHTML = `<p class="notice">En attente de validation par ton professeur…</p>`;
     } else if (showForm) {
         const refused = myAccess.status === "refused"
             ? `<p class="notice">Demande refusée par ton professeur.</p>`
@@ -1007,7 +1007,7 @@ function accessBoxHTML(c) {
 
     const rows = pending.map(a => {
         const dup = count[fold(a.pseudo)] > 1
-            ? ` <span class="tag warn">⚠ doublon possible</span>`
+            ? ` <span class="tag warn">Doublon possible</span>`
             : "";
 
         return `
@@ -1072,7 +1072,7 @@ function viewLive(m) {
             .map(x => `${esc(x.t)} &amp; ${esc(x.r)}`)
             .join(" et ");
 
-        verdict = `<p class="notice">✅ ${names} ${qualified.length > 1 ? "ont" : "a"} la majorité absolue : tu peux clôturer le tour.</p>`;
+        verdict = `<p class="notice">${names} ${qualified.length > 1 ? "ont" : "a"} la majorité absolue : tu peux clôturer le tour.</p>`;
     } else {
         verdict = `<p class="notice">Majorité absolue : ${needed} voix sur ${c.valid} exprimée(s). Pas encore atteinte.</p>`;
     }
@@ -1146,7 +1146,7 @@ function viewResults(m) {
         ? `<div class="grid">${elected.map(x => `
               <div class="box winner">
                   <span class="tag win">Binôme n°${x.seat}</span>
-                  <h2>🏆 ${esc(x.t)} &amp; ${esc(x.r)}</h2>
+                  <h2>${esc(x.t)} &amp; ${esc(x.r)}</h2>
                   <p class="muted">Titulaire : ${esc(x.t)} · Remplaçant : ${esc(x.r)}</p>
               </div>`).join("")}</div>`
         : `<p class="notice">Aucun binôme n'a encore été élu à la majorité absolue.</p>`;
@@ -1239,7 +1239,7 @@ function showPodium(c) {
     const delayOf  = r => 2.1 + (n - r) * 1.3;          // rang 1 = dernier révélé
     const finalAt  = n ? delayOf(1) + .7 : 0;
     const order    = n === 0 ? [] : n === 1 ? [1] : n === 2 ? [2, 1] : [2, 1, 3];   // 2e à gauche, 1er au centre
-    const colors   = ["#F7C948", "#1E3FCC", "#D42F3E", "#2FB67A"];
+    const colors   = ["#E8BB3F", "#8DB2FF", "#FF8B7B", "#74D6A0"];
 
     const cols = order.map(r => {
         const x = list[r - 1];
@@ -1247,7 +1247,7 @@ function showPodium(c) {
         return `
             <div class="pd-col pd-r${r}" style="--d:${delayOf(r).toFixed(2)}s">
                 <div class="pd-who">
-                    ${r === 1 ? `<span class="pd-crown" aria-hidden="true">👑</span>` : ""}
+                    ${r === 1 ? `<span class="pd-crown" aria-hidden="true"><svg viewBox="0 0 32 22"><path d="M2 20 0 5l8 6 8-10 8 10 8-6-2 15z" fill="#E8BB3F"/></svg></span>` : ""}
                     <b>${esc(x.t)} &amp; ${esc(x.r)}</b>
                     <span>Titulaire : ${esc(x.t)} · Remplaçant : ${esc(x.r)}</span>
                 </div>
@@ -3296,7 +3296,7 @@ function notifyAccess(code, rows, className) {
         const same = x => fold(x.pseudo) === fold(a.pseudo);
         const dup  = !!a.pseudo && (loadApproved(code).some(same) || pending.filter(same).length > 1);
 
-        toast(name + " demande à voter" + where + (dup ? " ⚠ doublon possible" : ""), [
+        toast(name + " demande à voter" + where + (dup ? " (doublon possible)" : ""), [
             { label: "Valider", run: () => decideFromToast(code, a.voter_id, true,  name) },
             { label: "Refuser", cls: "danger", run: () => decideFromToast(code, a.voter_id, false, name) }
         ]);
@@ -3524,7 +3524,7 @@ function viewLegal() {
            (articles L.111-1, L.122-4 et L.335-2 du Code de la propriété intellectuelle).</p>
         <p>Les contenus saisis par les utilisateurs (prénoms, programmes) restent leur propriété ;
            ils autorisent seulement leur affichage dans l'élection concernée.</p>
-        <p>Éléments tiers : polices Big Shoulders Display et Public Sans (licence SIL OFL, via Google Fonts)
+        <p>Éléments tiers : polices Bitter, Caveat et Source Sans 3 (licence SIL OFL, via Google Fonts)
            et bibliothèques Supabase JS, jsPDF et qrcode-generator (licence MIT).</p>
 
         <h2>Responsabilité</h2>
