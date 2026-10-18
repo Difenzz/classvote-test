@@ -1476,3 +1476,31 @@ body.dialog-lock {
 @media (prefers-reduced-motion: reduce) {
     .toast { animation: none; }
 }
+
+
+/* ==========================================================================
+   15. SIGNATURES DU PROCÈS-VERBAL
+   ========================================================================== */
+
+.sigs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+.sig {
+    display: grid;
+    gap: 4px;
+    justify-items: start;
+}
+
+/* Le fond reste clair même en thème sombre : l'encre est foncée */
+.sig-pad {
+    width: 100%;
+    aspect-ratio: 600 / 220;
+    background: #fff;
+    border: 2px dashed var(--line);
+    border-radius: 10px;
+    touch-action: none;
+    cursor: crosshair;
+}
