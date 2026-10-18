@@ -1115,7 +1115,7 @@ function viewLive(m) {
         <div class="card-actions">
             ${closeButton}
             <button onclick="phase('${c.code}','vote','live')">Ouvrir le vote</button>
-            <button onclick="phase('${c.code}','res','live')">Publier les résultats</button>
+            ${c.phase === "res" ? "" : `<button onclick="phase('${c.code}','res','live')">Publier les résultats</button>`}
         </div>
 
         <nav class="nav-row" aria-label="Navigation">
@@ -2237,12 +2237,14 @@ const SIG_SLOTS = [
     ["pres", "Président de séance (professeur)"],
     ["ass0", "Assesseur 1"],
     ["ass1", "Assesseur 2"],
-    ["bin0", "Binôme élu 1"],
-    ["bin1", "Binôme élu 2"]
+    ["bin0t", "Binôme élu 1 · titulaire"],
+    ["bin0s", "Binôme élu 1 · suppléant"],
+    ["bin1t", "Binôme élu 2 · titulaire"],
+    ["bin1s", "Binôme élu 2 · suppléant"]
 ];
 const SIG_W = 600, SIG_H = 220;   // taille interne des zones de dessin
 
-let sigs      = {};     // { pres, ass0, ass1, bin0, bin1 } → image PNG (data URL)
+let sigs      = {};     // { pres, ass0, ass1, bin0t, bin0s, bin1t, bin1s } → image PNG (data URL)
 let sigsClass = null;   // classe à laquelle appartiennent les signatures
 
 function sigPadsHTML() {
@@ -2349,7 +2351,7 @@ function drawSignatures(doc, p, y, sg) {
 
     const box = (x, top, bw, label, name, img) => {
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
+        doc.setFontSize(8.5);
         doc.text(pdfSafe(label), x, top);
 
         doc.setFont("helvetica", "normal");
@@ -2375,10 +2377,21 @@ function drawSignatures(doc, p, y, sg) {
 
     y += 46;
 
+    /* « Titulaire + suppléant » → deux noms, un cadre chacun */
+    const split = n => {
+        const [a, b] = String(n || "").split("+");
+
+        return [(a || "").trim(), (b || "").trim()];
+    };
+    const [n1t, n1s] = split(p.elus[0].name);
+    const [n2t, n2s] = split(p.elus[1].name);
+
     [
-        ["Binôme élu 1 (titulaire + suppléant)", p.elus[0].name, sg.bin0],
-        ["Binôme élu 2 (titulaire + suppléant)", p.elus[1].name, sg.bin1]
-    ].forEach(([label, name, img], i) => box(M + i * 88.5, y, 85.5, label, name, img));
+        ["Binôme 1 · Titulaire", n1t, sg.bin0t],
+        ["Binôme 1 · Suppléant", n1s, sg.bin0s],
+        ["Binôme 2 · Titulaire", n2t, sg.bin1t],
+        ["Binôme 2 · Suppléant", n2s, sg.bin1s]
+    ].forEach(([label, name, img], i) => box(M + i * 44.5, y, 40.5, label, name, img));
 }
 
 function note(text, ok) {
