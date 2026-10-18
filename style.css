@@ -1507,7 +1507,13 @@ body.dialog-lock {
 
 /* Podium : bouton « détail » plus discret */
 .pd-foot .pd-btn {
-    min-height: 36px;
-    padding: 5px 14px;
-    font-size: 14px;
+    width: auto;
+    min-height: 28px;
+    padding: 3px 12px;
+    border-width: 1px;
+    border-radius: 6px;
+    box-shadow: none;
+    font-size: 12.5px;
+    line-height: 1.2;
+    white-space: nowrap;
 }
