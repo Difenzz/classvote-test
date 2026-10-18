@@ -2044,14 +2044,73 @@ const pdfSafe = s => String(s ?? "")
 
 const slug = s => fold(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-function pdfFooter(doc) {
-    for (let i = 1; i <= doc.getNumberOfPages(); i++) {
+function pdfFinish(doc) {
+    const n = doc.getNumberOfPages();
+    const today = new Date().toLocaleDateString("fr-FR");
+
+    for (let i = 1; i <= n; i++) {
         doc.setPage(i);
+
+        doc.setFillColor(30, 63, 204);
+        doc.rect(0, 0, 70, 3.2, "F");
+        doc.setFillColor(226, 230, 241);
+        doc.rect(70, 0, 70, 3.2, "F");
+        doc.setFillColor(212, 47, 62);
+        doc.rect(140, 0, 70, 3.2, "F");
+
+        doc.setDrawColor(15, 27, 61);
+        doc.setLineWidth(.7);
+        doc.rect(10, 10, 190, 276);
+        doc.setDrawColor(30, 63, 204);
+        doc.setLineWidth(.2);
+        doc.rect(11.6, 11.6, 186.8, 272.8);
+
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.setTextColor(120);
-        doc.text("Document généré par ClassVote le " + new Date().toLocaleDateString("fr-FR"), 105, 291, { align: "center" });
+        doc.setTextColor(110, 118, 145);
+        doc.text("Document généré par ClassVote le " + today, 18, 291.5);
+        doc.text("Page " + i + " / " + n, 192, 291.5, { align: "right" });
     }
+}
+
+function pdfBanner(doc, lines, sub) {
+    const M = 18, w = 174, y0 = 17;
+    const h = 7 + lines.length * 7.5 + (sub ? 8 : 0);
+
+    doc.setFillColor(15, 27, 61);
+    doc.rect(M, y0, w, h, "F");
+
+    doc.setFillColor(30, 63, 204);
+    doc.rect(M, y0 + h, w / 3, 1.6, "F");
+    doc.setFillColor(226, 230, 241);
+    doc.rect(M + w / 3, y0 + h, w / 3, 1.6, "F");
+    doc.setFillColor(212, 47, 62);
+    doc.rect(M + 2 * w / 3, y0 + h, w / 3, 1.6, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    lines.forEach((t, i) => doc.text(pdfSafe(t), 105, y0 + 9 + i * 7.5, { align: "center" }));
+
+    if (sub) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(205, 213, 240);
+        doc.text(pdfSafe(sub), 105, y0 + 9 + lines.length * 7.5 + .5, { align: "center" });
+    }
+
+    doc.setTextColor(15, 27, 61);
+    return y0 + h + 11;
+}
+
+function pdfHeading(doc, text, y) {
+    doc.setFillColor(30, 63, 204);
+    doc.rect(18, y - 4, 1.8, 5.2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 27, 61);
+    doc.text(pdfSafe(text), 22, y);
+    return y + 4;
 }
 
 /* Une page « ACTE DE CANDIDATURE » */
@@ -2066,16 +2125,7 @@ function drawAct(doc, a) {
         }
     };
 
-    doc.setTextColor(15, 27, 61);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(21);
-    doc.text("ACTE DE CANDIDATURE", W / 2, y, { align: "center" });
-
-    y += 5;
-    doc.setDrawColor(30, 63, 204);
-    doc.setLineWidth(.9);
-    doc.line(M, y, W - M, y);
-    y += 11;
+    y = pdfBanner(doc, ["ACTE DE CANDIDATURE"], "Élection des délégués de classe");
     doc.setFontSize(11);
 
     const field = (label, value) => {
@@ -2134,7 +2184,7 @@ function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
     doc.setLineWidth(.25);
     doc.setTextColor(15, 27, 61);
 
-    const draw = (cells, bold) => {
+    const draw = (cells, bold, zebra) => {
         doc.setFont("helvetica", bold ? "bold" : "normal");
         doc.setFontSize(9.5);
 
@@ -2150,10 +2200,16 @@ function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
 
         cells.forEach((_, i) => {
             if (bold) {
-                doc.setFillColor(232, 236, 250);
+                doc.setFillColor(15, 27, 61);
                 doc.rect(cx, y, widths[i], h, "FD");
+                doc.setTextColor(255, 255, 255);
+            } else if (zebra) {
+                doc.setFillColor(240, 243, 251);
+                doc.rect(cx, y, widths[i], h, "FD");
+                doc.setTextColor(15, 27, 61);
             } else {
                 doc.rect(cx, y, widths[i], h);
+                doc.setTextColor(15, 27, 61);
             }
             /* Texte centré dans la case, horizontalement et verticalement (« / » compris) */
             const top = y + (h - lines[i].length * 4.4) / 2;
@@ -2168,7 +2224,7 @@ function pdfTable(doc, x, y, widths, head, rows, minH = 8) {
     };
 
     draw(head, true);
-    rows.forEach(r => draw(r, false));
+    rows.forEach((r, i) => draw(r, false, i % 2 === 1));
     return y;
 }
 
@@ -2196,16 +2252,9 @@ function drawMinutes(doc, p, sg = {}) {
     const dots = (v, n) => v || ".".repeat(n);
     let y = 22;
 
-    doc.setTextColor(15, 27, 61);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text("PROCÈS-VERBAL D'ÉLECTION", W / 2, y, { align: "center" });
-    doc.text("DES DÉLÉGUÉS DE CLASSE", W / 2, y + 7, { align: "center" });
-
+    y = pdfBanner(doc, ["PROCÈS-VERBAL D'ÉLECTION", "DES DÉLÉGUÉS DE CLASSE"], "Année scolaire " + pdfSafe(p.annee));
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    doc.text("Année scolaire " + pdfSafe(p.annee), W / 2, y + 15, { align: "center" });
-    y += 25;
 
     const intro = doc.splitTextToSize(pdfSafe(
         `Je soussigné(e) M. / Mme ${dots(p.prof, 20)} déclare avoir fait procéder le ${dots(p.date, 12)} ` +
@@ -2213,6 +2262,8 @@ function drawMinutes(doc, p, sg = {}) {
 
     doc.text(intro, M, y);
     y += intro.length * 5.5 + 5;
+
+    y = pdfHeading(doc, "RÉSULTATS DU SCRUTIN", y);
 
     y = pdfTable(doc, M, y, [94, 40, 40],
         ["TITULAIRE + SON SUPPLÉANT", "Suffrages 1er tour", "Suffrages 2ème tour"],
@@ -2223,6 +2274,8 @@ function drawMinutes(doc, p, sg = {}) {
             ["Abstentions",          p.stats.abstentions[0], p.stats.abstentions[1]]
         ]) + 8;
 
+    y = pdfHeading(doc, "RÉCAPITULATIF DES VOTES", y);
+
     y = pdfTable(doc, M, y, [94, 40, 40],
         ["", "1er tour", "2ème tour"],
         PV_STATS.map(([k, label]) => [label, p.stats[k][0], p.stats[k][1]])) + 9;
@@ -2232,9 +2285,7 @@ function drawMinutes(doc, p, sg = {}) {
         y = 22;
     }
 
-    doc.setFont("helvetica", "bold");
-    doc.text("Élèves élus délégués :", M, y);
-    y += 3;
+    y = pdfHeading(doc, "ÉLÈVES ÉLUS DÉLÉGUÉS", y);
 
     y = pdfTable(doc, M, y, [114, 60],
         ["TITULAIRE + SUPPLÉANT", "Régime : D.P, EXT"],
@@ -2420,16 +2471,17 @@ function clearSig(k) {
 function drawSignatures(doc, p, y, sg) {
     const M = 18;
 
-    if (y > 188) {
+    if (y > 178) {
         doc.addPage();
         y = 22;
     }
 
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
     doc.setTextColor(15, 27, 61);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("SIGNATURES", M, y);
-    y += 6;
+    doc.text(pdfSafe("Fait à " + ".".repeat(28) + ", le " + (p.date || ".".repeat(14))), M, y);
+    y += 10;
+    y = pdfHeading(doc, "SIGNATURES", y) + 3;
 
     const box = (x, top, bw, label, name, img) => {
         doc.setFont("helvetica", "bold");
@@ -2498,7 +2550,7 @@ async function savePdf(list, name) {
             drawAct(doc, a.data);
         });
 
-        pdfFooter(doc);
+        pdfFinish(doc);
         doc.save(name);
         note("PDF téléchargé.", true);
     } catch (e) {
@@ -2705,9 +2757,6 @@ function viewDossier(m) {
             </div>
 
             <h2>Signatures</h2>
-            <p class="muted small">Signe avec le doigt ou la souris. Une zone laissée vide devient un cadre vide
-               dans le PDF, à signer à la main après impression. Les signatures ne sont pas enregistrées :
-               elles restent sur cet écran jusqu'au rechargement de la page, et n'apparaissent que dans le PDF téléchargé.</p>
             <div class="sigs">${padsHTML}</div>
 
             <div class="row">
@@ -2811,7 +2860,7 @@ async function downloadMinutes() {
         const doc = new J({ unit: "mm", format: "a4" });
 
         drawMinutes(doc, p, await trimmedSigs());
-        pdfFooter(doc);
+        pdfFinish(doc);
         doc.save(`proces-verbal-${slug(p.classe) || "classe"}.pdf`);
         note("Procès-verbal enregistré et téléchargé.", true);
     } catch (e) {
