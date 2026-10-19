@@ -955,3 +955,27 @@ GRANT ALL ON TABLE public.round_voters TO service_role;
 
 GRANT ALL ON TABLE public.voter_access TO service_role;
 GRANT SELECT ON TABLE public.voter_access TO authenticated;
+
+
+-- ============================================================
+-- SUPPRESSION DU COMPTE PROFESSEUR (migration_v7.sql)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.delete_my_account() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+    -- Réservé à un professeur connecté (les élèves sont des sessions anonymes)
+    if auth.uid() is null or not public.is_teacher() then
+        raise exception 'Action non autorisée.' using errcode = '42501';
+    end if;
+
+    delete from auth.users where id = auth.uid();
+end;
+$$;
+
+REVOKE ALL ON FUNCTION public.delete_my_account() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.delete_my_account() FROM anon;
+GRANT EXECUTE ON FUNCTION public.delete_my_account() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.delete_my_account() TO service_role;
