@@ -7,7 +7,25 @@
 const SUPABASE_URL = "https://vclfmojfmwgnkfnnknks.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjbGZtb2pmbXdnbmtmbm5rbmtzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE3MDQwNiwiZXhwIjoyMTA3NzQ2NDA2fQ.nfyoA6m6MZ8Jtnuy6F38u7wqwe27xuzc7JoQUc65z1M";
 
+/* Lus AVANT la création du client : Supabase retire ensuite le fragment de l'adresse.
+   Lien de réinitialisation du mot de passe : « #access_token=…&type=recovery »
+   Lien expiré ou déjà utilisé :               « #error=access_denied&error_code=otp_expired… » */
+let recovering = /[#&]type=recovery/.test(location.hash);
+const AUTH_LINK_ERROR = /[#&]error(_code)?=/.test(location.hash);
+
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+sb.auth.onAuthStateChange(event => {
+    if (event === "PASSWORD_RECOVERY") {
+        recovering = true;
+
+        /* Le démarrage a déjà affiché un écran : on bascule sur le nouveau mot de passe */
+        if (typeof render === "function" && view !== "reset" && document.querySelector("#app").innerHTML) {
+            view = "reset";
+            render();
+        }
+    }
+});
 
 /* Renvoie les données d'une réponse Supabase, ou lève l'erreur */
 const check = ({ data, error }) => {
@@ -32,6 +50,15 @@ function explain(e) {
     }
     if (e && e.code === "23505") {
         return "Cet enregistrement existe déjà.";
+    }
+    if (/rate limit|only request this after|too many requests/i.test(text)) {
+        return "Trop de demandes : patiente une minute avant de réessayer.";
+    }
+    if (/different from the old password/i.test(text)) {
+        return "Choisis un mot de passe différent de l'ancien.";
+    }
+    if (/password should be at least|weak password/i.test(text)) {
+        return "Mot de passe trop faible (6 caractères minimum).";
     }
     if (/anonymous sign-ins are disabled/i.test(text)) {
         return "Connexion impossible pour le moment : préviens ton professeur.";
@@ -93,6 +120,32 @@ const api = {
 
     async signOut() {
         await sb.auth.signOut();
+    },
+
+    /* Envoie l'e-mail « mot de passe oublié » (la réponse est identique que le compte existe ou non) */
+    async resetPassword(email) {
+        check(await sb.auth.resetPasswordForEmail(email, {
+            redirectTo: location.origin + location.pathname
+        }));
+    },
+
+    /* Définit le nouveau mot de passe (session de récupération ou professeur connecté) */
+    async updatePassword(password) {
+        return check(await sb.auth.updateUser({ password })).user;
+    },
+
+    /* Utilisateur connecté (e-mail du professeur) */
+    async currentUser() {
+        const { data } = await sb.auth.getSession();
+        return data.session ? data.session.user : null;
+    },
+
+    /* Supprime le compte du professeur et toutes ses données (voir migration_v7.sql) */
+    async deleteAccount() {
+        check(await sb.rpc("delete_my_account"));
+
+        /* Le compte n'existe plus : on efface seulement la session locale */
+        await sb.auth.signOut({ scope: "local" });
     },
 
 
@@ -242,6 +295,7 @@ let view = "home";   // écran affiché
 let cur  = null;     // code de la classe ouverte
 let prof = null;     // identifiant du professeur connecté (null = élève)
 let msg  = "";       // message d'erreur à afficher au prochain rendu
+let profEmail = "";  // adresse e-mail du professeur connecté (écran « Mon compte »)
 
 let cls       = null;   // classe ouverte (avec ses binômes)
 let voted     = false;  // cet appareil a-t-il déjà voté dans cette classe ?
@@ -323,6 +377,12 @@ async function ensureMe() {
 
 /* Charge depuis Supabase les données dont l'écran courant a besoin */
 async function refresh() {
+    if (view === "account") {
+        const user = await api.currentUser();
+        profEmail = user && user.email ? user.email : "";
+        return;
+    }
+
     if (view === "dash") {
         myClasses = await api.myClasses(prof);
         watchAccessFromDash(myClasses);
@@ -465,6 +525,17 @@ function err(m) {
     const el = $("#msg");
 
     if (el) {
+        el.classList.remove("ok");
+        el.textContent = m;
+    }
+}
+
+/* Affiche une information positive (en vert) */
+function info(m) {
+    const el = $("#msg");
+
+    if (el) {
+        el.classList.add("ok");
         el.textContent = m;
     }
 }
@@ -928,8 +999,59 @@ function viewTeacherLogin(m) {
 
             <button class="go">Se connecter</button>
             <button type="button" onclick="plogin(true)">Créer le compte</button>
+            <button type="button" class="link" onclick="forgot()">Mot de passe oublié ?</button>
             <button type="button" class="link" onclick="go('home')">← Retour élève</button>
 
+        </form>`;
+}
+
+function viewReset(m) {
+    return `
+        <form class="box narrow" onsubmit="event.preventDefault(); savePassword()">
+
+            <h1>Nouveau mot de passe</h1>
+            <p class="muted">Choisis un nouveau mot de passe pour ton compte professeur.</p>
+
+            <input id="np1" type="password" autocomplete="new-password"
+                   placeholder="Nouveau mot de passe (6 caractères min.)" aria-label="Nouveau mot de passe">
+            <input id="np2" type="password" autocomplete="new-password"
+                   placeholder="Confirme le mot de passe" aria-label="Confirmation du mot de passe">
+
+            ${m}
+
+            <button class="go">Enregistrer</button>
+            <button type="button" class="link" onclick="recovering = false; go('dash')">Plus tard</button>
+
+        </form>`;
+}
+
+function viewAccount(m) {
+    if (!prof) {
+        return viewTeacherLogin(m);
+    }
+
+    return `
+        <div class="row between">
+            <h1>Mon compte</h1>
+            <button class="link" onclick="go('dash')">← Retour</button>
+        </div>
+
+        <div class="box">
+            <h2>Adresse e-mail</h2>
+            <p>${esc(profEmail)}</p>
+        </div>
+
+        <form class="box" onsubmit="event.preventDefault(); deleteAccount()">
+            <h2>Supprimer mon compte</h2>
+            <p class="muted">Ton compte, tes élections, leurs résultats, les actes de candidature et les
+               procès-verbaux seront supprimés définitivement. Télécharge ce dont tu as besoin avant.</p>
+
+            <input id="dpw" type="password" autocomplete="current-password"
+                   placeholder="Ton mot de passe, pour confirmer" aria-label="Mot de passe">
+
+            ${m}
+
+            <button class="danger">Supprimer mon compte</button>
         </form>`;
 }
 
@@ -979,7 +1101,10 @@ function viewDashboard(m) {
     return `
         <div class="row between">
             <h1>Espace professeur</h1>
-            <button class="link" onclick="logout()">Déconnexion</button>
+            <div class="row">
+                <button class="link" onclick="go('account')">Mon compte</button>
+                <button class="link" onclick="logout()">Déconnexion</button>
+            </div>
         </div>
 
         ${newForm}
@@ -1334,6 +1459,8 @@ const VIEWS = {
     home:   viewHome,
     plogin: viewTeacherLogin,
     dash:   viewDashboard,
+    reset:  viewReset,
+    account: viewAccount,
     role:   viewRole,
     cand:   viewCandidate,
     vote:   viewVoter,
@@ -1442,6 +1569,88 @@ async function plogin(create) {
     }
 
     go("dash");
+}
+
+async function forgot() {
+    const email = $("#pid").value.trim().toLowerCase();
+
+    if (!email) {
+        return err("Saisis ton adresse e-mail ci-dessus, puis clique sur « Mot de passe oublié ».");
+    }
+
+    try {
+        await api.resetPassword(email);
+    } catch (e) {
+        return err(explain(e));
+    }
+
+    info("Si un compte existe avec cette adresse, un e-mail de réinitialisation vient d'être envoyé. Pense à vérifier tes courriers indésirables.");
+}
+
+async function savePassword() {
+    const a = $("#np1").value;
+    const b = $("#np2").value;
+
+    if (a.length < 6) {
+        return err("Mot de passe de 6 caractères minimum.");
+    }
+    if (a !== b) {
+        return err("Les deux mots de passe ne correspondent pas.");
+    }
+
+    try {
+        const user = await api.updatePassword(a);
+        me   = user.id;
+        prof = user.id;
+    } catch (e) {
+        return err(explain(e));
+    }
+
+    recovering = false;
+    await go("dash");
+    info("Mot de passe modifié.");
+}
+
+async function deleteAccount() {
+    const pw = $("#dpw").value;
+
+    if (!pw) {
+        return err("Saisis ton mot de passe pour confirmer.");
+    }
+
+    /* On revérifie le mot de passe avant une action irréversible */
+    try {
+        await api.signIn(profEmail, pw);
+    } catch (e) {
+        return err(explain(e));
+    }
+
+    const yes = await askConfirm(
+        "Ton compte et toutes tes données (élections, résultats, actes de candidature, procès-verbaux) seront supprimés définitivement. Cette action est irréversible.",
+        { title: "Supprimer ton compte ?", ok: "Supprimer définitivement", danger: true }
+    );
+
+    if (!yes) {
+        return;
+    }
+
+    try {
+        await api.deleteAccount();
+    } catch (e) {
+        return err(explain(e));
+    }
+
+    prof      = null;
+    cur       = null;
+    cls       = null;
+    myClasses = [];
+    access    = [];
+    picked    = [];
+    profEmail = "";
+    me        = (await api.session()).id;   // nouvelle session anonyme
+
+    await go("home", "Ton compte a été supprimé.");
+    info("Ton compte a été supprimé.");
 }
 
 async function logout() {
@@ -3625,7 +3834,7 @@ function viewCgu() {
         <h2>5. Compte professeur</h2>
         <p>Le professeur fournit une adresse e-mail exacte, garde son mot de passe confidentiel et prévient les éditeurs
            en cas d'utilisation non autorisée de son compte. Il est responsable des élections qu'il crée.
-           Il peut supprimer son compte en écrivant à l'adresse de contact.</p>
+           Il peut supprimer son compte à tout moment depuis « Mon compte » (suppression définitive de ses élections et données).</p>
 
         <h2>6. Mineurs</h2>
         <p>Les élèves votent sans compte et sans donner leur nom. Lorsqu'un service en ligne demande des données
@@ -3838,9 +4047,23 @@ if (!readCookie(CONSENT_KEY)) {
         const user = await api.session();
         me = user.id;
 
+        /* Lien de réinitialisation expiré ou déjà utilisé */
+        if (AUTH_LINK_ERROR) {
+            history.replaceState(null, "", location.pathname + location.search);
+            prof = user.is_anonymous ? null : user.id;
+            return go(prof ? "dash" : "plogin",
+                "Ce lien a expiré ou a déjà été utilisé : redemande un e-mail de réinitialisation.");
+        }
+
         /* Un professeur déjà connecté retrouve directement son tableau de bord */
         if (!user.is_anonymous) {
             prof = user.id;
+
+            /* Il arrive depuis le lien de l'e-mail « mot de passe oublié » */
+            if (recovering) {
+                view = "reset";
+                return render();
+            }
 
             if (pageFromHash()) {
                 view = "dash";
